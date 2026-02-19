@@ -1,0 +1,167 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Roles enum for role-based access control
+enum Role {
+  CUSTOMER
+  EMPLOYEE
+  ADMIN
+}
+
+// Fuel types
+enum FuelType {
+  PETROL
+  DIESEL
+}
+
+// Order status flow: pending → delivered → billed → paid
+enum OrderStatus {
+  PENDING
+  DELIVERED
+  BILLED
+  PAID
+}
+
+// Bill status
+enum BillStatus {
+  PENDING
+  BILLED
+  PAID
+}
+
+// Users table - stores all users (customers, employees, admins)
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  phone     String?
+  fullName  String   @map("full_name")
+  role      Role     @default(CUSTOMER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  orders        Order[]
+  pricesCreated FuelPrice[] @relation("CreatedByAdmin")
+  auditLogs     AuditLog[]
+  cashAdvanceTransactions CashAdvanceTransaction[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// Orders table - main order management
+model Order {
+  id                    String      @id @default(cuid())
+  customerId            String      @map("customer_id")
+  vehicleNumber         String      @map("vehicle_number")
+  fuelType              FuelType    @map("fuel_type")
+  amountRequested       Float?      @map("amount_requested") // Amount in INR if customer pays by amount
+  quantityRequested     Float?      @map("quantity_requested") // Quantity in liters if customer pays by quantity
+  cashAdvance           Float       @default(0) @map("cash_advance") // Cash given to driver
+  status                OrderStatus @default(PENDING)
+  deliveredAt           DateTime?   @map("delivered_at")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  customer User   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  bills    Bill[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([deliveredAt])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+// Fuel prices table - daily price management
+model FuelPrice {
+  id            String   @id @default(cuid())
+  fuelType      FuelType @map("fuel_type")
+  pricePerLiter Float    @map("price_per_liter")
+  date          DateTime // Date for which the price applies
+  createdByAdminId String @map("created_by_admin_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  createdByAdmin User @relation("CreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+
+  @@unique([fuelType, date]) // One price per fuel type per day
+  @@index([date])
+  @@index([fuelType])
+  @@map("fuel_prices")
+}
+
+// Cash Advance Transactions table - track individual cash disbursements and reconciliations
+model CashAdvanceTransaction {
+  id                String    @id @default(cuid())
+  orderId           String    @map("order_id")
+  employeeId        String    @map("employee_id")
+  amount            Float     // Amount of cash given as advance
+  transactionType   String    @map("transaction_type") // DISBURSED, RECONCILED, REFUNDED
+  description       String?   // Additional notes
+  reconciliationBillId String? @map("reconciliation_bill_id") // Bill that this advance was reconciled against
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  employee User @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([employeeId])
+  @@index([transactionType])
+  @@index([createdAt])
+  @@map("cash_advance_transactions")
+}
+
+// Bills table - billing and payment tracking
+model Bill {
+  id                String     @id @default(cuid())
+  orderId           String     @unique @map("order_id")
+  quantityDelivered Float      @map("quantity_delivered")
+  pricePerLiter     Float      @map("price_per_liter")
+  totalAmount       Float      @map("total_amount") // quantity_delivered * price_per_liter
+  cashAdvance       Float      @map("cash_advance") // Cash advance given to driver
+  netAmount         Float      @map("net_amount") // total_amount + cashAdvance - adjustments
+  adjustments       Float      @default(0) // Any manual adjustments
+  status            BillStatus @default(PENDING)
+  paidAt            DateTime?  @map("paid_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("bills")
+}
+
+// Audit logs table - track admin actions
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  action    String   // e.g., "PRICE_UPDATE", "BILL_GENERATED", etc.
+  tableName String   @map("table_name") // e.g., "fuel_prices", "bills"
+  recordId  String?  @map("record_id") // ID of the affected record
+  changes   String   // JSON string of what changed
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
