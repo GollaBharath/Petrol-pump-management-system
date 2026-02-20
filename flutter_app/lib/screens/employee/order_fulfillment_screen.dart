@@ -47,7 +47,7 @@ class _OrderFulfillmentScreenState
     setState(() => isSubmitting = true);
 
     try {
-      final result = await ref.read(
+      await ref.read(
         markOrderDeliveredProvider((
           orderId: widget.orderId,
           quantityDelivered: quantityDelivered,
@@ -57,16 +57,19 @@ class _OrderFulfillmentScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Order marked as delivered'),
+            content: Text('Order marked as delivered successfully'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(true); // Return true to indicate success
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $error'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error: $error'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -78,183 +81,201 @@ class _OrderFulfillmentScreenState
 
   @override
   Widget build(BuildContext context) {
+    final orderAsync = ref.watch(orderDetailsProvider(widget.orderId));
+
     return Scaffold(
       appBar: AppBar(title: const Text('Complete Order'), elevation: 0),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Order Details Section
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Order Details',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _DetailRow('Order ID', widget.orderId.substring(0, 8)),
-                    const SizedBox(height: 12),
-                    _DetailRow('Status', 'PENDING', color: Colors.orange),
-                    const SizedBox(height: 12),
-                    _DetailRow('Fuel Type', 'PETROL'),
-                    const SizedBox(height: 12),
-                    _DetailRow('Vehicle', 'MH-01-AB-1234'),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Quantity Delivered Input
-            Text(
-              'Quantity Delivered (Liters)',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: quantityDeliveredController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              enabled: !isSubmitting,
-              decoration: InputDecoration(
-                hintText: 'Enter quantity delivered',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                prefixIcon: const Icon(Icons.local_gas_station),
-                suffixText: 'L',
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Charges Section
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Charges Summary',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Unit Price:'),
-                        Text(
-                          '₹ 95.50',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Quantity:'),
-                        Text(
-                          '${quantityDeliveredController.text.isEmpty ? '0' : quantityDeliveredController.text} L',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Total Amount:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '₹ 0.00',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Submit Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: isSubmitting ? null : _handleMarkDelivered,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: AppConfig.primaryColor,
-                  disabledBackgroundColor: Colors.grey,
-                ),
-                child: isSubmitting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                    : const Text(
-                        'Mark as Delivered',
+      body: orderAsync.when(
+        data: (order) => SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Order Details Card
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Order Details',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      _buildDetailRow(
+                          'Order ID', '#${order.id.substring(0, 8)}'),
+                      const Divider(height: 24),
+                      _buildDetailRow('Vehicle', order.vehicleNumber),
+                      const Divider(height: 24),
+                      _buildDetailRow('Fuel Type', order.fuelType),
+                      const Divider(height: 24),
+                      _buildDetailRow('Status', order.status,
+                          valueColor: order.status == 'PENDING'
+                              ? Colors.orange
+                              : Colors.green),
+                      if (order.quantityRequested != null) ...[
+                        const Divider(height: 24),
+                        _buildDetailRow('Requested Quantity',
+                            '${order.quantityRequested!.toStringAsFixed(2)} L'),
+                      ],
+                      if (order.amountRequested != null) ...[
+                        const Divider(height: 24),
+                        _buildDetailRow('Requested Amount',
+                            '₹${order.amountRequested!.toStringAsFixed(2)}'),
+                      ],
+                      if (order.cashAdvance > 0) ...[
+                        const Divider(height: 24),
+                        _buildDetailRow('Cash Advance',
+                            '₹${order.cashAdvance.toStringAsFixed(2)}',
+                            valueColor: Colors.green),
+                      ],
+                    ],
+                  ),
+                ),
               ),
+              const SizedBox(height: 24),
+
+              // Quantity Input Section
+              const Text(
+                'Quantity Delivered',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: quantityDeliveredController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                enabled: !isSubmitting && order.status == 'PENDING',
+                decoration: InputDecoration(
+                  hintText: 'Enter quantity in liters',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: const Icon(Icons.local_gas_station),
+                  suffixText: 'L',
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Action Button
+              if (order.status == 'PENDING')
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: isSubmitting ? null : _handleMarkDelivered,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppConfig.primaryColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: isSubmitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Mark as Delivered',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.green),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Order already ${order.status.toLowerCase()}',
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                const Text(
+                  'Failed to load order',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () =>
+                      ref.invalidate(orderDetailsProvider(widget.orderId)),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
-}
 
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? color;
-
-  const _DetailRow(this.label, this.value, {this.color});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildDetailRow(String label, String value, {Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey)),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: (color ?? Colors.blue).withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.grey,
           ),
-          child: Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: color ?? Colors.blue,
-            ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: valueColor ?? Colors.black87,
           ),
         ),
       ],

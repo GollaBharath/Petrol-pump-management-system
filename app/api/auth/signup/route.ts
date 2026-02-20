@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 			await supabase.auth.admin.createUser({
 				email: validatedData.email,
 				password: validatedData.password,
-				email_confirm: false,
+				email_confirm: true, // Auto-confirm email for development
 			});
 
 		if (authError || !authData.user) {

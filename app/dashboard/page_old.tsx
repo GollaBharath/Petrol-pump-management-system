@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import DashboardClient from "./dashboard-client";
 
 export const metadata = {
@@ -8,16 +9,15 @@ export const metadata = {
 };
 
 export default async function DashboardPage() {
-	// Check for auth token in cookies
-	const cookieStore = cookies();
-	const token = cookieStore.get("auth_token");
+	const session = await getServerSession(authOptions);
 
-	if (!token) {
-		redirect("/admin/login");
+	if (!session) {
+		redirect("/api/auth/signin");
 	}
 
-	// In production, verify the token here
-	// For now, we'll trust the token exists
+	if (session.user.role !== "ADMIN") {
+		redirect("/");
+	}
 
 	return <DashboardClient />;
 }

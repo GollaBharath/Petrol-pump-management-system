@@ -31,9 +31,13 @@ class Order {
       customerId: json['customerId'] as String,
       vehicleNumber: json['vehicleNumber'] as String,
       fuelType: json['fuelType'] as String,
-      amountRequested: json['amountRequested'] as double?,
-      quantityRequested: json['quantityRequested'] as double?,
-      cashAdvance: (json['cashAdvance'] as num?)?.toDouble() ?? 0,
+      amountRequested: json['amountRequested'] != null
+          ? (json['amountRequested'] as num).toDouble()
+          : null,
+      quantityRequested: json['quantityRequested'] != null
+          ? (json['quantityRequested'] as num).toDouble()
+          : null,
+      cashAdvance: (json['cashAdvance'] as num?)?.toDouble() ?? 0.0,
       status: json['status'] as String,
       deliveredAt: json['deliveredAt'] != null
           ? DateTime.parse(json['deliveredAt'] as String)
@@ -145,9 +149,12 @@ class Bill {
   final double pricePerLiter;
   final double totalAmount;
   final double cashAdvance;
+  final double adjustments;
   final double netAmount;
   final String status;
   final DateTime? paidAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
   const Bill({
     required this.id,
@@ -156,9 +163,12 @@ class Bill {
     required this.pricePerLiter,
     required this.totalAmount,
     required this.cashAdvance,
+    required this.adjustments,
     required this.netAmount,
     required this.status,
     this.paidAt,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
   factory Bill.fromJson(Map<String, dynamic> json) {
@@ -169,11 +179,14 @@ class Bill {
       pricePerLiter: (json['pricePerLiter'] as num).toDouble(),
       totalAmount: (json['totalAmount'] as num).toDouble(),
       cashAdvance: (json['cashAdvance'] as num).toDouble(),
+      adjustments: (json['adjustments'] as num?)?.toDouble() ?? 0.0,
       netAmount: (json['netAmount'] as num).toDouble(),
       status: json['status'] as String,
       paidAt: json['paidAt'] != null
           ? DateTime.parse(json['paidAt'] as String)
           : null,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
   }
 
@@ -185,9 +198,12 @@ class Bill {
       'pricePerLiter': pricePerLiter,
       'totalAmount': totalAmount,
       'cashAdvance': cashAdvance,
+      'adjustments': adjustments,
       'netAmount': netAmount,
       'status': status,
       'paidAt': paidAt?.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 }
@@ -216,7 +232,9 @@ class User {
       fullName: json['fullName'] as String,
       phone: json['phone'] as String?,
       role: json['role'] as String? ?? 'CUSTOMER',
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
     );
   }
 

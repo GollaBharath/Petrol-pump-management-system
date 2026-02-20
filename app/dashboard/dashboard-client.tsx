@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
 	Card,
@@ -35,17 +36,35 @@ const CHART_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 export default function DashboardClient() {
 	const [activeTab, setActiveTab] = useState("overview");
+	const router = useRouter();
+
+	const handleLogout = () => {
+		// Clear cookies
+		document.cookie = "auth_token=; path=/; max-age=0";
+		document.cookie = "user_role=; path=/; max-age=0";
+		// Redirect to login
+		router.push("/admin/login");
+	};
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
 			<div className="max-w-7xl mx-auto">
 				{/* Header */}
-				<div className="mb-8">
-					<h1 className="text-4xl font-bold text-slate-900">Admin Dashboard</h1>
-					<p className="text-slate-600 mt-2">
-						Manage orders, track cash advances, set prices, and monitor
-						operations
-					</p>
+				<div className="mb-8 flex justify-between items-center">
+					<div>
+						<h1 className="text-4xl font-bold text-slate-900">
+							Admin Dashboard
+						</h1>
+						<p className="text-slate-600 mt-2">
+							Manage orders, track cash advances, set prices, and monitor
+							operations
+						</p>
+					</div>
+					<button
+						onClick={handleLogout}
+						className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+						Logout
+					</button>
 				</div>
 
 				{/* Tabs */}

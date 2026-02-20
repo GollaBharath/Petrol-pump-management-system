@@ -67,25 +67,27 @@ class PendingOrderCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Order #${order.id.substring(0, 8)}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Order #${order.id.substring(0, 8)}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        order.customer?.fullName ?? 'Unknown',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                        const SizedBox(height: 4),
+                        Text(
+                          'Vehicle: ${order.vehicleNumber}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -120,19 +122,6 @@ class PendingOrderCard extends StatelessWidget {
                     Column(
                       children: [
                         const Text(
-                          'Vehicle',
-                          style: TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          order.vehicleNumber,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      children: [
-                        const Text(
                           'Fuel Type',
                           style: TextStyle(fontSize: 11, color: Colors.grey),
                         ),
@@ -152,12 +141,12 @@ class PendingOrderCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${order.quantityRequested} L',
+                            '${order.quantityRequested.toStringAsFixed(2)} L',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],
                       )
-                    else
+                    else if (order.amountRequested != null)
                       Column(
                         children: [
                           const Text(
@@ -166,11 +155,24 @@ class PendingOrderCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '₹${order.amountRequested}',
+                            '₹${order.amountRequested.toStringAsFixed(2)}',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
+                    Column(
+                      children: [
+                        const Text(
+                          'Cash Advance',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${order.cashAdvance.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),

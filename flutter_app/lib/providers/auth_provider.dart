@@ -10,15 +10,20 @@ class AuthNotifier extends StateNotifier<User?> {
   Future<void> _initAuth() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
-    final userJson = prefs.getString('user_data');
+    final userId = prefs.getString('user_id');
+    final userEmail = prefs.getString('user_email');
+    final userRole = prefs.getString('user_role');
+    final userFullName = prefs.getString('user_full_name');
 
-    if (token != null && userJson != null) {
-      try {
-        // In a real app, you'd verify the token is still valid
-        state = User.fromJson(Map<String, dynamic>.from(userJson as Map));
-      } catch (e) {
-        state = null;
-      }
+    if (token != null && userId != null) {
+      // Reconstruct user from stored data
+      state = User(
+        id: userId,
+        email: userEmail ?? '',
+        fullName: userFullName ?? '',
+        role: userRole ?? 'CUSTOMER',
+        createdAt: DateTime.now(), // Placeholder
+      );
     }
   }
 
@@ -26,13 +31,21 @@ class AuthNotifier extends StateNotifier<User?> {
     state = user;
     final prefs = await SharedPreferences.getInstance();
     // Store user data for offline access
+    await prefs.setString('user_id', user.id);
+    await prefs.setString('user_email', user.email);
+    await prefs.setString('user_role', user.role);
+    await prefs.setString('user_full_name', user.fullName);
   }
 
   Future<void> logout() async {
     state = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
-    await prefs.remove('user_data');
+    await prefs.remove('refresh_token');
+    await prefs.remove('user_id');
+    await prefs.remove('user_email');
+    await prefs.remove('user_role');
+    await prefs.remove('user_full_name');
   }
 }
 

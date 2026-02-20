@@ -8,6 +8,16 @@ export default function Home() {
 				<p className="text-xl text-gray-600 mb-8">
 					Digitized fuel delivery management system for petrol pumps in India
 				</p>
+
+				{/* Admin Dashboard Link */}
+				<div className="mb-8">
+					<a
+						href="/admin/login"
+						className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-semibold">
+						Admin Dashboard
+					</a>
+				</div>
+
 				<div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
 					<h2 className="text-2xl font-semibold mb-4">API Endpoints</h2>
 					<div className="text-left">

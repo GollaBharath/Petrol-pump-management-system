@@ -3,6 +3,17 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:petrol_pump_management/config/app_config.dart';
 import 'package:petrol_pump_management/models/models.dart';
 
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+  final dynamic details;
+
+  ApiException(this.message, {this.statusCode, this.details});
+
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   late final Dio _dio;
   final _secureStorage = const FlutterSecureStorage();
@@ -42,6 +53,28 @@ class ApiService {
     );
   }
 
+  // Helper method to handle API errors
+  ApiException _handleError(DioException error) {
+    if (error.response != null) {
+      final data = error.response!.data;
+      final message = data is Map<String, dynamic> && data.containsKey('error')
+          ? data['error']
+          : 'An error occurred';
+      return ApiException(
+        message,
+        statusCode: error.response!.statusCode,
+        details: data,
+      );
+    } else if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout) {
+      return ApiException('Connection timeout. Please try again.');
+    } else if (error.type == DioExceptionType.connectionError) {
+      return ApiException('No internet connection. Please check your network.');
+    } else {
+      return ApiException('An unexpected error occurred: ${error.message}');
+    }
+  }
+
   // Auth endpoints
   Future<Map<String, dynamic>> signup({
     required String email,
@@ -52,7 +85,7 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.post(
-        '/api/auth/signup',
+        '/auth/signup',
         data: {
           'email': email,
           'password': password,
@@ -61,9 +94,9 @@ class ApiService {
           'role': role,
         },
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -73,25 +106,30 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.post(
-        '/api/auth/login',
+        '/auth/login',
         data: {'email': email, 'password': password},
       );
 
-      final data = response.data;
-      if (data['session'] != null) {
-        await _secureStorage.write(
-          key: AppConfig.accessTokenKey,
-          value: data['session']['accessToken'],
-        );
-        await _secureStorage.write(
-          key: AppConfig.refreshTokenKey,
-          value: data['session']['refreshToken'],
-        );
+      final data = response.data as Map<String, dynamic>;
+      if (data.containsKey('session')) {
+        final session = data['session'] as Map<String, dynamic>;
+        if (session.containsKey('accessToken')) {
+          await _secureStorage.write(
+            key: AppConfig.accessTokenKey,
+            value: session['accessToken'] as String,
+          );
+        }
+        if (session.containsKey('refreshToken')) {
+          await _secureStorage.write(
+            key: AppConfig.refreshTokenKey,
+            value: session['refreshToken'] as String,
+          );
+        }
       }
 
       return data;
-    } catch (e) {
-      rethrow;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -110,54 +148,58 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.post(
-        '/api/orders',
+        '/orders',
         data: {
           'vehicleNumber': vehicleNumber,
           'fuelType': fuelType,
-          'amountRequested': amountRequested,
-          'quantityRequested': quantityRequested,
+          if (amountRequested != null) 'amountRequested': amountRequested,
+          if (quantityRequested != null) 'quantityRequested': quantityRequested,
           'cashAdvance': cashAdvance,
         },
       );
-      return Order.fromJson(response.data['order']);
-    } catch (e) {
-      rethrow;
+      final data = response.data as Map<String, dynamic>;
+      return Order.fromJson(data['order'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
   Future<List<Order>> getOrders({int limit = 20, int offset = 0}) async {
     try {
       final response = await _dio.get(
-        '/api/orders',
+        '/orders',
         queryParameters: {'limit': limit, 'offset': offset},
       );
-      final orders = (response.data['orders'] as List)
+      final data = response.data as Map<String, dynamic>;
+      final orders = (data['orders'] as List)
           .map((order) => Order.fromJson(order as Map<String, dynamic>))
           .toList();
       return orders;
-    } catch (e) {
-      rethrow;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
   Future<List<Order>> getPendingOrders() async {
     try {
-      final response = await _dio.get('/api/orders/pending');
-      final orders = (response.data['orders'] as List)
+      final response = await _dio.get('/orders/pending');
+      final data = response.data as Map<String, dynamic>;
+      final orders = (data['orders'] as List)
           .map((order) => Order.fromJson(order as Map<String, dynamic>))
           .toList();
       return orders;
-    } catch (e) {
-      rethrow;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
   Future<Order> getOrderDetails(String orderId) async {
     try {
-      final response = await _dio.get('/api/orders/$orderId');
-      return Order.fromJson(response.data['order']);
-    } catch (e) {
-      rethrow;
+      final response = await _dio.get('/orders/$orderId');
+      final data = response.data as Map<String, dynamic>;
+      return Order.fromJson(data['order'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -167,25 +209,27 @@ class ApiService {
   ) async {
     try {
       final response = await _dio.patch(
-        '/api/orders/$orderId',
+        '/orders/$orderId',
         data: {'quantityDelivered': quantityDelivered},
       );
-      return Order.fromJson(response.data['order']);
-    } catch (e) {
-      rethrow;
+      final data = response.data as Map<String, dynamic>;
+      return Order.fromJson(data['order'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
   // Price endpoints
   Future<List<FuelPrice>> getLatestPrices() async {
     try {
-      final response = await _dio.get('/api/prices');
-      final prices = (response.data['prices'] as List)
+      final response = await _dio.get('/prices');
+      final data = response.data as Map<String, dynamic>;
+      final prices = (data['prices'] as List)
           .map((price) => FuelPrice.fromJson(price as Map<String, dynamic>))
           .toList();
       return prices;
-    } catch (e) {
-      rethrow;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -196,44 +240,47 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.get(
-        '/api/prices/history',
+        '/prices/history',
         queryParameters: {
           if (fuelType != null) 'fuelType': fuelType,
           'limit': limit,
           'offset': offset,
         },
       );
-      final prices = (response.data['prices'] as List)
+      final data = response.data as Map<String, dynamic>;
+      final prices = (data['prices'] as List)
           .map((price) => FuelPrice.fromJson(price as Map<String, dynamic>))
           .toList();
       return prices;
-    } catch (e) {
-      rethrow;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
   // Bill endpoints
   Future<Bill> getBillDetails(String billId) async {
     try {
-      final response = await _dio.get('/api/bills/$billId');
-      return Bill.fromJson(response.data['bill']);
-    } catch (e) {
-      rethrow;
+      final response = await _dio.get('/bills/$billId');
+      final data = response.data as Map<String, dynamic>;
+      return Bill.fromJson(data['bill'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
   Future<List<Bill>> getBills({int limit = 20, int offset = 0}) async {
     try {
       final response = await _dio.get(
-        '/api/bills',
+        '/bills',
         queryParameters: {'limit': limit, 'offset': offset},
       );
-      final bills = (response.data['bills'] as List)
+      final data = response.data as Map<String, dynamic>;
+      final bills = (data['bills'] as List)
           .map((bill) => Bill.fromJson(bill as Map<String, dynamic>))
           .toList();
       return bills;
-    } catch (e) {
-      rethrow;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -246,7 +293,7 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.post(
-        '/api/cash-advances',
+        '/cash-advances',
         data: {
           'orderId': orderId,
           'employeeId': employeeId,
@@ -254,9 +301,9 @@ class ApiService {
           if (description != null) 'description': description,
         },
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -265,23 +312,23 @@ class ApiService {
   ) async {
     try {
       final response = await _dio.get(
-        '/api/cash-advances/$employeeId',
+        '/cash-advances/$employeeId',
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
   Future<Map<String, dynamic>> getPendingCashAdvances() async {
     try {
       final response = await _dio.get(
-        '/api/cash-advances/report',
+        '/cash-advances/report',
         queryParameters: {'type': 'pending'},
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -291,16 +338,16 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.get(
-        '/api/cash-advances/report',
+        '/cash-advances/report',
         queryParameters: {
           'type': 'range',
           'startDate': startDate.toIso8601String(),
           'endDate': endDate.toIso8601String(),
         },
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -311,15 +358,15 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.post(
-        '/api/cash-advances/reconcile/$transactionId',
+        '/cash-advances/reconcile/$transactionId',
         data: {
           'billId': billId,
           'amount': amount,
         },
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -331,16 +378,16 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.post(
-        '/api/admin/prices',
+        '/admin/prices',
         data: {
           'fuelType': fuelType,
           'pricePerLiter': pricePerLiter,
           if (date != null) 'date': date,
         },
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -350,24 +397,24 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.put(
-        '/api/admin/prices',
+        '/admin/prices',
         data: {
           'priceId': priceId,
           'newPricePerLiter': newPricePerLiter,
         },
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
   Future<Map<String, dynamic>> getPriceUpdateStatus() async {
     try {
-      final response = await _dio.get('/api/admin/prices');
-      return response.data;
-    } catch (e) {
-      rethrow;
+      final response = await _dio.get('/admin/prices');
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 
@@ -377,12 +424,12 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.get(
-        '/api/admin/prices/history/$fuelType',
+        '/admin/prices/history/$fuelType',
         queryParameters: {'days': days},
       );
-      return response.data;
-    } catch (e) {
-      rethrow;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
   }
 }

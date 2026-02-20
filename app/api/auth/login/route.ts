@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { prisma } from "@/lib/prisma";
 import { LoginSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/auth";
 
@@ -27,6 +28,22 @@ export async function POST(request: NextRequest) {
 			return errorResponse("Invalid email or password", 401);
 		}
 
+		// Get user profile from database
+		const userProfile = await prisma.user.findUnique({
+			where: { id: data.user.id },
+			select: {
+				id: true,
+				email: true,
+				fullName: true,
+				role: true,
+				phone: true,
+			},
+		});
+
+		if (!userProfile) {
+			return errorResponse("User profile not found", 404);
+		}
+
 		return successResponse({
 			message: "Login successful",
 			session: {
@@ -35,8 +52,11 @@ export async function POST(request: NextRequest) {
 				expiresIn: data.session.expires_in,
 			},
 			user: {
-				id: data.user.id,
-				email: data.user.email,
+				id: userProfile.id,
+				email: userProfile.email,
+				fullName: userProfile.fullName,
+				role: userProfile.role,
+				phone: userProfile.phone,
 			},
 		});
 	} catch (error: any) {

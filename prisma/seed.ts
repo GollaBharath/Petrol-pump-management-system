@@ -1,4 +1,8 @@
+import { config } from "dotenv";
 import { PrismaClient } from "@prisma/client";
+
+// Load environment variables from .env.local
+config({ path: ".env.local" });
 
 const prisma = new PrismaClient();
 
@@ -63,7 +67,7 @@ async function seed() {
 
 		const petrolPrice = await prisma.fuelPrice.upsert({
 			where: {
-				fuel_type_date: {
+				fuelType_date: {
 					fuelType: "PETROL",
 					date: today,
 				},
@@ -80,7 +84,7 @@ async function seed() {
 
 		const dieselPrice = await prisma.fuelPrice.upsert({
 			where: {
-				fuel_type_date: {
+				fuelType_date: {
 					fuelType: "DIESEL",
 					date: today,
 				},

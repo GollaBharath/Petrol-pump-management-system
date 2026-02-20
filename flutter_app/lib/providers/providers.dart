@@ -47,8 +47,31 @@ final loginProvider =
   );
 
   final prefs = await SharedPreferences.getInstance();
-  await prefs.setString('access_token', result['session']['accessToken']);
-  await prefs.setString('user_email', params.email);
+
+  // Store session tokens
+  if (result.containsKey('session')) {
+    final session = result['session'] as Map<String, dynamic>;
+    await prefs.setString('access_token', session['accessToken'] as String);
+    if (session.containsKey('refreshToken')) {
+      await prefs.setString('refresh_token', session['refreshToken'] as String);
+    }
+  }
+
+  // Store user data
+  if (result.containsKey('user')) {
+    final user = result['user'] as Map<String, dynamic>;
+    await prefs.setString('user_id', user['id'] as String);
+    await prefs.setString('user_email', user['email'] as String);
+    await prefs.setString('user_role', user['role'] as String);
+    await prefs.setString('user_full_name', user['fullName'] as String);
+    if (user.containsKey('phone') && user['phone'] != null) {
+      await prefs.setString('user_phone', user['phone'] as String);
+    }
+
+    // Update auth notifier with user data
+    final authNotifier = ref.read(authNotifierProvider.notifier);
+    await authNotifier.setUser(User.fromJson(user));
+  }
 
   // Invalidate current user provider to refetch
   ref.invalidate(currentUserProvider);
