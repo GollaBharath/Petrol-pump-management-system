@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 const supabase = createClient(
 	process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,14 +43,13 @@ export async function authenticate(
 			);
 		}
 
-		// Get user details including role from database
-		const { data: userData, error: userError } = await supabase
-			.from("users")
-			.select("id, email, role")
-			.eq("id", data.user.id)
-			.single();
+		// Get user details including role from Prisma database
+		const userData = await prisma.user.findUnique({
+			where: { id: data.user.id },
+			select: { id: true, email: true, role: true },
+		});
 
-		if (userError || !userData) {
+		if (!userData) {
 			return NextResponse.json({ error: "User not found" }, { status: 401 });
 		}
 

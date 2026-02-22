@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { successResponse, errorResponse } from "@/lib/auth";
+import { authenticate, successResponse, errorResponse } from "@/lib/auth";
 
 /**
  * GET /api/prices/history
- * Get price history with optional date range filter
+ * Get price history - admin only
  */
 export async function GET(request: NextRequest) {
 	try {
+		const authResult = await authenticate(request);
+		if (authResult instanceof NextResponse) return authResult;
+		const authRequest = authResult as any;
+		if (authRequest.user?.role !== "ADMIN") {
+			return errorResponse("Admin access required", 403);
+		}
+
 		const { searchParams } = new URL(request.url);
 		const fuelType = searchParams.get("fuelType");
 		const limit = Math.min(parseInt(searchParams.get("limit") || "30"), 365);

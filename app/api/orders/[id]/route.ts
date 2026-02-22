@@ -38,7 +38,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 						phone: true,
 					},
 				},
-				bills: true,
 			},
 		});
 
@@ -63,7 +62,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 /**
  * PATCH /api/orders/[id]/deliver
- * Mark order as delivered (employees and admins only)
+ * Mark order as delivered and complete billing (employees and admins only)
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
 	try {
@@ -80,6 +79,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 		const order = await prisma.order.findUnique({
 			where: { id },
+			include: {
+				customer: {
+					include: {
+						customerProfile: true,
+					},
+				},
+			},
 		});
 
 		if (!order) {
@@ -90,39 +96,74 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 			return errorResponse("Order is not pending", 400);
 		}
 
-		const updatedOrder = await prisma.order.update({
-			where: { id },
-			data: {
-				status: "DELIVERED",
-				deliveredAt: new Date(),
-			},
-			include: {
-				customer: {
-					select: {
-						id: true,
-						fullName: true,
-						email: true,
+		// Get current fuel price
+		const { getFuelPrice } = await import("@/lib/db-utils");
+		const pricePerLiter = await getFuelPrice(order.fuelType);
+
+		if (!pricePerLiter) {
+			return errorResponse("No fuel price available", 400);
+		}
+
+		// Calculate total amount
+		const totalAmount = validatedData.quantityDelivered * pricePerLiter;
+
+		// Update order and customer profile in a transaction
+		const result = await prisma.$transaction(async (tx) => {
+			// Update order
+			const updatedOrder = await tx.order.update({
+				where: { id },
+				data: {
+					status: "COMPLETED",
+					quantityDelivered: validatedData.quantityDelivered,
+					pricePerLiter,
+					totalAmount,
+					deliveredAt: new Date(),
+					completedAt: new Date(),
+				},
+				include: {
+					customer: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
 					},
 				},
-			},
+			});
+
+			// Update customer profile balance (negative = customer owes money)
+			if (order.customer.customerProfile) {
+				await tx.customerProfile.update({
+					where: { id: order.customer.customerProfile.id },
+					data: {
+						currentBalance: {
+							decrement: totalAmount,
+						},
+						totalOrders: {
+							increment: 1,
+						},
+						totalPurchases: {
+							increment: totalAmount,
+						},
+					},
+				});
+			}
+
+			return updatedOrder;
 		});
 
 		// Log this action
-		await createAuditLog(
-			authRequest.user.id,
-			"ORDER_MARKED_DELIVERED",
-			"orders",
-			id,
-			{
-				quantity: validatedData.quantityDelivered,
-				previousStatus: order.status,
-				timestamp: new Date().toISOString(),
-			},
-		);
+		await createAuditLog(authRequest.user.id, "ORDER_COMPLETED", "orders", id, {
+			quantityDelivered: validatedData.quantityDelivered,
+			pricePerLiter,
+			totalAmount,
+			previousStatus: order.status,
+			timestamp: new Date().toISOString(),
+		});
 
 		return successResponse({
-			message: "Order marked as delivered",
-			order: updatedOrder,
+			message: "Order completed successfully",
+			order: result,
 		});
 	} catch (error: any) {
 		console.error("Order delivery error:", error);

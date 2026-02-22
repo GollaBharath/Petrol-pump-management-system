@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateSchema } from "@/lib/validation";
 import { authenticate } from "@/lib/auth";
 import {
 	setDailyPrice,
@@ -21,18 +20,20 @@ const updatePriceSchema = z.object({
 
 export async function POST(request: NextRequest) {
 	try {
-		// Authenticate as admin
-		const user = await authenticate(request);
-		if (!user || user.role !== "ADMIN") {
+		const authResult = await authenticate(request);
+		if (authResult instanceof NextResponse) return authResult;
+		const authRequest = authResult as any;
+		if (authRequest.user?.role !== "ADMIN") {
 			return NextResponse.json(
 				{ error: "Only admins can set fuel prices" },
 				{ status: 403 },
 			);
 		}
+		const user = authRequest.user;
 
 		// Validate request body
 		const body = await request.json();
-		const data = validateSchema(setPriceSchema, body);
+		const data = setPriceSchema.parse(body);
 
 		// Set daily price
 		const price = await setDailyPrice(
@@ -62,18 +63,20 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
 	try {
-		// Authenticate as admin
-		const user = await authenticate(request);
-		if (!user || user.role !== "ADMIN") {
+		const authResult = await authenticate(request);
+		if (authResult instanceof NextResponse) return authResult;
+		const authRequest = authResult as any;
+		if (authRequest.user?.role !== "ADMIN") {
 			return NextResponse.json(
 				{ error: "Only admins can update fuel prices" },
 				{ status: 403 },
 			);
 		}
+		const user = authRequest.user;
 
 		// Validate request body
 		const body = await request.json();
-		const data = validateSchema(updatePriceSchema, body);
+		const data = updatePriceSchema.parse(body);
 
 		// Update price
 		const updated = await updateDailyPrice(
@@ -102,9 +105,10 @@ export async function PUT(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
 	try {
-		// Authenticate as admin
-		const user = await authenticate(request);
-		if (!user || user.role !== "ADMIN") {
+		const authResult = await authenticate(request);
+		if (authResult instanceof NextResponse) return authResult;
+		const authRequest = authResult as any;
+		if (authRequest.user?.role !== "ADMIN") {
 			return NextResponse.json(
 				{ error: "Only admins can view price status" },
 				{ status: 403 },

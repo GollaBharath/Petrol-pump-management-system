@@ -1,258 +1,330 @@
 "use client";
 
-import { useState } from "react";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
+import { useState, useEffect, useCallback } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle, Clock } from "lucide-react";
+import {
+	AlertCircle,
+	CheckCircle,
+	RefreshCw,
+	Loader2,
+	TrendingUp,
+	TrendingDown,
+	Minus,
+	Fuel,
+} from "lucide-react";
+import { api } from "@/lib/api-client";
+
+type FuelType = "PETROL" | "DIESEL";
 
 interface PriceStatus {
-	fuelType: "PETROL" | "DIESEL";
+	fuelType: FuelType;
 	currentPrice: number | null;
 	lastUpdated: string | null;
 	needsUpdate: boolean;
 	hoursOverdue: number;
 }
 
-const mockPriceStatus: PriceStatus[] = [
-	{
-		fuelType: "PETROL",
-		currentPrice: 102.5,
-		lastUpdated: "2026-02-19 06:00",
-		needsUpdate: false,
-		hoursOverdue: 0,
-	},
-	{
-		fuelType: "DIESEL",
-		currentPrice: null,
-		lastUpdated: null,
-		needsUpdate: true,
-		hoursOverdue: 18,
-	},
-];
+interface PriceHistory {
+	id: string;
+	fuelType: FuelType;
+	pricePerLiter: number;
+	date: string;
+	createdAt: string;
+	setBy?: { fullName: string };
+}
 
-export default function PriceManagementSection() {
-	const [selectedFuel, setSelectedFuel] = useState<"PETROL" | "DIESEL">(
-		"PETROL",
+const FUEL_CONFIG: Record<
+	FuelType,
+	{ label: string; color: string; bg: string; border: string }
+> = {
+	PETROL: {
+		label: "Petrol",
+		color: "text-orange-600",
+		bg: "bg-orange-50",
+		border: "border-orange-200",
+	},
+	DIESEL: {
+		label: "Diesel",
+		color: "text-blue-600",
+		bg: "bg-blue-50",
+		border: "border-blue-200",
+	},
+};
+
+function PriceDelta({ history }: { history: PriceHistory[] }) {
+	if (history.length < 2) return null;
+	const delta = history[0].pricePerLiter - history[1].pricePerLiter;
+	if (delta === 0)
+		return <Minus className="h-4 w-4 text-gray-400 inline ml-1" />;
+	return delta > 0 ? (
+		<span className="text-xs text-red-600 font-medium ml-2">
+			<TrendingUp className="h-3 w-3 inline" /> +₹{delta.toFixed(2)} from prev
+		</span>
+	) : (
+		<span className="text-xs text-green-600 font-medium ml-2">
+			<TrendingDown className="h-3 w-3 inline" /> ₹{delta.toFixed(2)} from prev
+		</span>
 	);
-	const [newPrice, setNewPrice] = useState("");
-	const [isSubmitting, setIsSubmitting] = useState(false);
+}
 
-	const handleSetPrice = async () => {
-		if (!newPrice || isNaN(parseFloat(newPrice))) {
-			alert("Please enter a valid price");
+function FuelCard({
+	status,
+	history,
+	onPriceSet,
+}: {
+	status: PriceStatus;
+	history: PriceHistory[];
+	onPriceSet: () => void;
+}) {
+	const [inputPrice, setInputPrice] = useState("");
+	const [submitting, setSubmitting] = useState(false);
+	const [success, setSuccess] = useState(false);
+	const [err, setErr] = useState<string | null>(null);
+	const cfg = FUEL_CONFIG[status.fuelType];
+
+	const handleSet = async () => {
+		const parsed = parseFloat(inputPrice);
+		if (!inputPrice || isNaN(parsed) || parsed <= 0) {
+			setErr("Enter a valid price");
 			return;
 		}
-
-		setIsSubmitting(true);
+		setSubmitting(true);
+		setErr(null);
 		try {
-			// Simulate API call
-			await new Promise((resolve) => setTimeout(resolve, 1000));
-			alert(
-				`Price for ${selectedFuel} set to ₹${parseFloat(newPrice).toFixed(2)}/L`,
-			);
-			setNewPrice("");
+			await api.post("/api/admin/prices", {
+				fuelType: status.fuelType,
+				pricePerLiter: parsed,
+			});
+			setInputPrice("");
+			setSuccess(true);
+			setTimeout(() => setSuccess(false), 3000);
+			onPriceSet();
+		} catch (e: any) {
+			setErr(e.message || "Failed to set price");
 		} finally {
-			setIsSubmitting(false);
+			setSubmitting(false);
 		}
 	};
 
-	const petrolStatus = mockPriceStatus.find((p) => p.fuelType === "PETROL");
-	const dieselStatus = mockPriceStatus.find((p) => p.fuelType === "DIESEL");
-
 	return (
-		<div className="space-y-6">
-			{/* Price Status Cards */}
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-				{[petrolStatus, dieselStatus].map((status) => (
-					<Card key={status?.fuelType}>
-						<CardHeader>
-							<div className="flex justify-between items-start">
-								<div>
-									<CardTitle>{status?.fuelType}</CardTitle>
-									<CardDescription>Current fuel price</CardDescription>
-								</div>
-								{status?.needsUpdate ? (
-									<AlertCircle className="h-6 w-6 text-red-600" />
-								) : (
-									<CheckCircle className="h-6 w-6 text-green-600" />
-								)}
-							</div>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg">
-								<p className="text-sm text-gray-600 mb-1">Price Per Liter</p>
-								<p className="text-3xl font-bold">
-									{status?.currentPrice
-										? `₹${status.currentPrice.toFixed(2)}`
-										: "Not set"}
-								</p>
-							</div>
-
-							<div className="space-y-2">
-								<div className="flex justify-between text-sm">
-									<span className="text-gray-600">Last Updated:</span>
-									<span className="font-medium">
-										{status?.lastUpdated || "Never"}
-									</span>
-								</div>
-
-								{status?.needsUpdate && (
-									<div className="flex justify-between text-sm bg-red-50 p-2 rounded">
-										<span className="text-red-900 font-medium">
-											<Clock className="inline h-4 w-4 mr-1" />
-											Overdue by {status.hoursOverdue} hours
-										</span>
-									</div>
-								)}
-
-								<Badge
-									className={
-										status?.needsUpdate
-											? "bg-red-100 text-red-800"
-											: "bg-green-100 text-green-800"
-									}>
-									{status?.needsUpdate ? "Update Required" : "Current"}
-								</Badge>
-							</div>
-						</CardContent>
-					</Card>
-				))}
-			</div>
-
-			{/* Set Price Form */}
-			<Card>
-				<CardHeader>
-					<CardTitle>Set Daily Price</CardTitle>
-					<CardDescription>
-						Update fuel prices for today. Can only set one price per fuel type
-						per 24 hours.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="space-y-4">
-					<div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg flex gap-3">
-						<AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-						<p className="text-sm text-yellow-800">
-							Only one price can be set per fuel type per 24 hours. Once set,
-							prices can only be updated within the same day.
-						</p>
-					</div>
-
-					<div className="space-y-4">
-						<div>
-							<Label htmlFor="fuel-type">Select Fuel Type</Label>
-							<Select
-								value={selectedFuel}
-								onValueChange={(v) =>
-									setSelectedFuel(v as "PETROL" | "DIESEL")
-								}>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="PETROL">Petrol</SelectItem>
-									<SelectItem value="DIESEL">Diesel</SelectItem>
-								</SelectContent>
-							</Select>
+		<Card
+			className={`border-2 ${status.needsUpdate ? "border-red-300" : "border-green-200"}`}>
+			<CardHeader className="pb-3">
+				<div className="flex items-center justify-between">
+					<div className="flex items-center gap-2">
+						<div className={`p-2 rounded-lg ${cfg.bg}`}>
+							<Fuel className={`h-5 w-5 ${cfg.color}`} />
 						</div>
+						<CardTitle className="text-xl">{cfg.label}</CardTitle>
+					</div>
+					{status.needsUpdate ? (
+						<Badge className="bg-red-100 text-red-700 border border-red-200">
+							<AlertCircle className="h-3 w-3 mr-1" />
+							Needs Update
+						</Badge>
+					) : (
+						<Badge className="bg-green-100 text-green-700 border border-green-200">
+							<CheckCircle className="h-3 w-3 mr-1" />
+							Set Today
+						</Badge>
+					)}
+				</div>
+			</CardHeader>
+			<CardContent className="space-y-5">
+				{/* Current Price Display */}
+				<div className={`rounded-xl p-4 ${cfg.bg} ${cfg.border} border`}>
+					<p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+						Today&apos;s Price
+					</p>
+					<div className="flex items-baseline gap-1">
+						<span className={`text-4xl font-bold ${cfg.color}`}>
+							{status.currentPrice ? `₹${status.currentPrice.toFixed(2)}` : "—"}
+						</span>
+						{status.currentPrice && (
+							<span className="text-sm text-gray-500">/L</span>
+						)}
+					</div>
+					<div className="flex items-center mt-1">
+						{status.currentPrice && <PriceDelta history={history} />}
+					</div>
+					{status.lastUpdated && (
+						<p className="text-xs text-gray-500 mt-2">
+							Updated {new Date(status.lastUpdated).toLocaleString("en-IN")}
+						</p>
+					)}
+					{status.needsUpdate && status.hoursOverdue > 0 && (
+						<p className="text-xs text-red-600 font-medium mt-1">
+							⚠ Overdue by {status.hoursOverdue}h — set today&apos;s price below
+						</p>
+					)}
+				</div>
 
-						<div>
-							<Label htmlFor="price">Price Per Liter (₹)</Label>
+				{/* Inline Set Price */}
+				<div className="space-y-2">
+					<p className="text-sm font-medium text-gray-700">
+						{status.needsUpdate ? "Set today's price" : "Update today's price"}
+					</p>
+					<div className="flex gap-2">
+						<div className="relative flex-1">
+							<span className="absolute left-3 top-2.5 text-gray-400 text-sm font-medium">
+								₹
+							</span>
 							<Input
-								id="price"
 								type="number"
 								step="0.01"
 								min="0"
-								placeholder="Enter price"
-								value={newPrice}
-								onChange={(e) => setNewPrice(e.target.value)}
+								placeholder="0.00"
+								value={inputPrice}
+								onChange={(e) => {
+									setInputPrice(e.target.value);
+									setErr(null);
+								}}
+								className="pl-7"
+								onKeyDown={(e) => e.key === "Enter" && handleSet()}
 							/>
 						</div>
-
 						<Button
-							onClick={handleSetPrice}
-							disabled={isSubmitting || !newPrice}
-							className="w-full"
-							size="lg">
-							{isSubmitting ? "Setting Price..." : "Set Price"}
+							onClick={handleSet}
+							disabled={submitting || !inputPrice}
+							className={success ? "bg-green-600 hover:bg-green-700" : ""}>
+							{submitting ? (
+								<Loader2 className="h-4 w-4 animate-spin" />
+							) : success ? (
+								<CheckCircle className="h-4 w-4" />
+							) : (
+								"Set"
+							)}
 						</Button>
 					</div>
-				</CardContent>
-			</Card>
+					{err && <p className="text-xs text-red-600">{err}</p>}
+					{success && (
+						<p className="text-xs text-green-600">Price updated successfully</p>
+					)}
+				</div>
 
-			{/* Price History */}
-			<Card>
-				<CardHeader>
-					<CardTitle>Recent Price Changes</CardTitle>
-					<CardDescription>Last 10 price updates</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<div className="space-y-2">
-						{[
-							{
-								date: "2026-02-19 06:00",
-								fuel: "PETROL",
-								price: 102.5,
-								setPy: "Admin",
-							},
-							{
-								date: "2026-02-18 06:00",
-								fuel: "PETROL",
-								price: 102.25,
-								setPy: "Admin",
-							},
-							{
-								date: "2026-02-17 06:00",
-								fuel: "PETROL",
-								price: 102.0,
-								setPy: "Admin",
-							},
-							{
-								date: "2026-02-16 06:00",
-								fuel: "PETROL",
-								price: 101.75,
-								setPy: "Admin",
-							},
-							{
-								date: "2026-02-15 06:00",
-								fuel: "PETROL",
-								price: 101.5,
-								setPy: "Admin",
-							},
-						].map((entry, idx) => (
-							<div
-								key={idx}
-								className="flex justify-between items-center p-3 border rounded-lg">
-								<div>
-									<p className="font-medium">{entry.fuel}</p>
-									<p className="text-sm text-gray-600">{entry.date}</p>
+				{/* Mini history in the card */}
+				{history.length > 0 && (
+					<div className="border-t pt-3">
+						<p className="text-xs text-gray-500 mb-2 font-medium">
+							Recent history
+						</p>
+						<div className="space-y-1.5">
+							{history.slice(0, 4).map((h, i) => (
+								<div
+									key={h.id}
+									className="flex justify-between items-center text-sm">
+									<span className="text-gray-500">
+										{new Date(h.date).toLocaleDateString("en-IN", {
+											day: "numeric",
+											month: "short",
+										})}
+									</span>
+									<span
+										className={`font-semibold ${i === 0 ? cfg.color : "text-gray-700"}`}>
+										₹{h.pricePerLiter.toFixed(2)}
+									</span>
 								</div>
-								<div className="text-right">
-									<p className="font-bold text-lg">
-										₹{entry.price.toFixed(2)}/L
-									</p>
-									<p className="text-xs text-gray-600">{entry.setPy}</p>
-								</div>
-							</div>
-						))}
+							))}
+						</div>
 					</div>
-				</CardContent>
-			</Card>
+				)}
+			</CardContent>
+		</Card>
+	);
+}
+
+export default function PriceManagementSection() {
+	const [priceStatus, setPriceStatus] = useState<PriceStatus[]>([]);
+	const [petrolHistory, setPetrolHistory] = useState<PriceHistory[]>([]);
+	const [dieselHistory, setDieselHistory] = useState<PriceHistory[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+
+	const fetchAll = useCallback(async () => {
+		setLoading(true);
+		setError(null);
+		try {
+			const [statusData, petrolData, dieselData] = await Promise.all([
+				api.get<{ status: PriceStatus[] }>("/api/admin/prices"),
+				api.get<{ history: PriceHistory[] }>(
+					"/api/admin/prices/history/PETROL?days=14",
+				),
+				api.get<{ history: PriceHistory[] }>(
+					"/api/admin/prices/history/DIESEL?days=14",
+				),
+			]);
+			setPriceStatus(statusData.status);
+			setPetrolHistory(petrolData.history);
+			setDieselHistory(dieselData.history);
+		} catch (err: any) {
+			setError(err.message || "Failed to load prices");
+		} finally {
+			setLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchAll();
+	}, [fetchAll]);
+
+	const petrolStatus = priceStatus.find((p) => p.fuelType === "PETROL");
+	const dieselStatus = priceStatus.find((p) => p.fuelType === "DIESEL");
+
+	return (
+		<div className="space-y-6">
+			<div className="flex items-center justify-between">
+				<div>
+					<h2 className="text-lg font-semibold text-gray-900">
+						Fuel Price Management
+					</h2>
+					<p className="text-sm text-gray-500">
+						Set daily prices for each fuel type. Prices are used for billing.
+					</p>
+				</div>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={fetchAll}
+					disabled={loading}>
+					<RefreshCw
+						className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+					/>
+					Refresh
+				</Button>
+			</div>
+
+			{error && (
+				<div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm flex items-center gap-2">
+					<AlertCircle className="h-4 w-4 flex-shrink-0" />
+					{error}
+				</div>
+			)}
+
+			{loading ? (
+				<div className="flex items-center justify-center py-20">
+					<Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+				</div>
+			) : (
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+					{petrolStatus && (
+						<FuelCard
+							status={petrolStatus}
+							history={petrolHistory}
+							onPriceSet={fetchAll}
+						/>
+					)}
+					{dieselStatus && (
+						<FuelCard
+							status={dieselStatus}
+							history={dieselHistory}
+							onPriceSet={fetchAll}
+						/>
+					)}
+				</div>
+			)}
 		</div>
 	);
 }

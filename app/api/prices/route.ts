@@ -89,11 +89,17 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/prices/latest
- * Get latest prices for all fuel types
+ * Get latest prices for all fuel types (admin only)
  */
 export async function GET(request: NextRequest) {
 	try {
-		// No auth required for price lookup
+		const authResult = await authenticate(request);
+		if (authResult instanceof NextResponse) return authResult;
+		const authRequest = authResult as any;
+		if (authRequest.user?.role !== "ADMIN") {
+			return errorResponse("Admin access required", 403);
+		}
+
 		const prices = await prisma.fuelPrice.groupBy({
 			by: ["fuelType"],
 			_max: {

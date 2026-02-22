@@ -7,10 +7,14 @@ export async function GET(
 	{ params }: { params: { fuelType: string } },
 ) {
 	try {
-		// Authenticate (accessible to all authenticated users)
-		const user = await authenticate(request);
-		if (!user) {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+		const authResult = await authenticate(request);
+		if (authResult instanceof NextResponse) return authResult;
+		const authRequest = authResult as any;
+		if (authRequest.user?.role !== "ADMIN") {
+			return NextResponse.json(
+				{ error: "Admin access required" },
+				{ status: 403 },
+			);
 		}
 
 		// Get query parameters

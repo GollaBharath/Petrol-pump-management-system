@@ -134,9 +134,7 @@ export default function BillingSection() {
 						<div className="text-3xl font-bold text-red-600">
 							₹{summary.totalOutstanding.toLocaleString("en-IN")}
 						</div>
-						<p className="text-sm text-gray-500 mt-1">
-							Amount due from customers
-						</p>
+						<p className="text-sm text-gray-500 mt-1">Amount due from customers</p>
 					</CardContent>
 				</Card>
 				<Card>
@@ -218,8 +216,7 @@ export default function BillingSection() {
 									{customers.map((customer) => {
 										const balance =
 											customer.customerProfile?.currentBalance || 0;
-										const totalOrders =
-											customer.customerProfile?.totalOrders || 0;
+										const totalOrders = customer.customerProfile?.totalOrders || 0;
 										const totalPurchases =
 											customer.customerProfile?.totalPurchases || 0;
 										const totalPayments =
@@ -261,9 +258,7 @@ export default function BillingSection() {
 														size="sm"
 														onClick={(e) => {
 															e.stopPropagation();
-															router.push(
-																`/dashboard/customers/${customer.id}`,
-															);
+															router.push(`/dashboard/customers/${customer.id}`);
 														}}>
 														<Eye className="h-4 w-4 mr-1" />
 														View

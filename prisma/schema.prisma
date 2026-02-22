@@ -23,19 +23,20 @@ enum FuelType {
   DIESEL
 }
 
-// Order status flow: pending → delivered → billed → paid
+// Order status flow: pending → delivered → completed
 enum OrderStatus {
   PENDING
   DELIVERED
-  BILLED
-  PAID
+  COMPLETED
 }
 
-// Bill status
-enum BillStatus {
-  PENDING
-  BILLED
-  PAID
+// Payment method
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  UPI
+  OTHER
 }
 
 // Users table - stores all users (customers, employees, admins)
@@ -52,11 +53,30 @@ model User {
   orders        Order[]
   pricesCreated FuelPrice[] @relation("CreatedByAdmin")
   auditLogs     AuditLog[]
-  cashAdvanceTransactions CashAdvanceTransaction[]
+  customerProfile CustomerProfile?
 
   @@index([email])
   @@index([role])
   @@map("users")
+}
+
+// Customer Profile - stores customer-specific data including balance
+model CustomerProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique @map("user_id")
+  currentBalance  Float    @default(0) @map("current_balance") // Negative = customer owes, Positive = credit
+  totalOrders     Int      @default(0) @map("total_orders")
+  totalPurchases  Float    @default(0) @map("total_purchases") // Lifetime purchase amount
+  totalPayments   Float    @default(0) @map("total_payments") // Lifetime payments made
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([userId])
+  @@map("customer_profiles")
 }
 
 // Orders table - main order management
@@ -67,17 +87,20 @@ model Order {
   fuelType              FuelType    @map("fuel_type")
   amountRequested       Float?      @map("amount_requested") // Amount in INR if customer pays by amount
   quantityRequested     Float?      @map("quantity_requested") // Quantity in liters if customer pays by quantity
-  cashAdvance           Float       @default(0) @map("cash_advance") // Cash given to driver
+  quantityDelivered     Float?      @map("quantity_delivered") // Actual quantity delivered
+  pricePerLiter         Float?      @map("price_per_liter") // Price at time of delivery
+  totalAmount           Float?      @map("total_amount") // quantityDelivered * pricePerLiter
   status                OrderStatus @default(PENDING)
   deliveredAt           DateTime?   @map("delivered_at")
+  completedAt           DateTime?   @map("completed_at")
   createdAt             DateTime    @default(now()) @map("created_at")
   updatedAt             DateTime    @updatedAt @map("updated_at")
 
   // Relations
   customer User   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  bills    Bill[]
 
   @@index([customerId])
+  @@index([vehicleNumber])
   @@index([status])
   @@index([deliveredAt])
   @@index([createdAt])
@@ -103,49 +126,26 @@ model FuelPrice {
   @@map("fuel_prices")
 }
 
-// Cash Advance Transactions table - track individual cash disbursements and reconciliations
-model CashAdvanceTransaction {
-  id                String    @id @default(cuid())
-  orderId           String    @map("order_id")
-  employeeId        String    @map("employee_id")
-  amount            Float     // Amount of cash given as advance
-  transactionType   String    @map("transaction_type") // DISBURSED, RECONCILED, REFUNDED
-  description       String?   // Additional notes
-  reconciliationBillId String? @map("reconciliation_bill_id") // Bill that this advance was reconciled against
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+// Payment table - track customer payments
+model Payment {
+  id                String         @id @default(cuid())
+  customerProfileId String         @map("customer_profile_id")
+  amount            Float          // Payment amount (positive)
+  paymentMethod     PaymentMethod? @map("payment_method")
+  paymentMethodNote String?        @map("payment_method_note") // Additional notes about payment method
+  reference         String?        // Payment reference number (cheque/transaction ID)
+  notes             String?        // Additional notes
+  paymentDate       DateTime       @default(now()) @map("payment_date")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
 
   // Relations
-  employee User @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  customerProfile CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
 
-  @@index([orderId])
-  @@index([employeeId])
-  @@index([transactionType])
+  @@index([customerProfileId])
+  @@index([paymentDate])
   @@index([createdAt])
-  @@map("cash_advance_transactions")
-}
-
-// Bills table - billing and payment tracking
-model Bill {
-  id                String     @id @default(cuid())
-  orderId           String     @unique @map("order_id")
-  quantityDelivered Float      @map("quantity_delivered")
-  pricePerLiter     Float      @map("price_per_liter")
-  totalAmount       Float      @map("total_amount") // quantity_delivered * price_per_liter
-  cashAdvance       Float      @map("cash_advance") // Cash advance given to driver
-  netAmount         Float      @map("net_amount") // total_amount + cashAdvance - adjustments
-  adjustments       Float      @default(0) // Any manual adjustments
-  status            BillStatus @default(PENDING)
-  paidAt            DateTime?  @map("paid_at")
-  createdAt         DateTime   @default(now()) @map("created_at")
-  updatedAt         DateTime   @updatedAt @map("updated_at")
-
-  // Relations
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([status])
-  @@index([createdAt])
-  @@map("bills")
+  @@map("payments")
 }
 
 // Audit logs table - track admin actions

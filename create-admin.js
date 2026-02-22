@@ -1,3 +1,4 @@
+require("dotenv").config({ path: ".env" });
 const { createClient } = require("@supabase/supabase-js");
 const { PrismaClient } = require("@prisma/client");
 
@@ -13,44 +14,68 @@ async function createAdminUser() {
 	const password = "admin123";
 	const fullName = "Admin User";
 
-	console.log("Creating admin user...");
+	console.log("Setting up admin user...");
 
 	try {
-		// Create user in Supabase Auth
-		const { data: authData, error: authError } =
+		let supabaseUserId;
+
+		// Try to create the Supabase Auth user
+		const { data: createData, error: createError } =
 			await supabase.auth.admin.createUser({
 				email,
 				password,
 				email_confirm: true,
 			});
 
-		if (authError) {
-			console.error("Error creating auth user:", authError);
-			return;
+		if (createError) {
+			if (
+				createError.message?.includes("already been registered") ||
+				createError.code === "email_exists"
+			) {
+				// User already exists in Supabase Auth — look up their ID
+				console.log("Auth user already exists, looking up ID...");
+				const { data: listData, error: listError } =
+					await supabase.auth.admin.listUsers();
+				if (listError) throw listError;
+				const existing = listData.users.find((u) => u.email === email);
+				if (!existing) {
+					console.error("Could not find existing Supabase auth user");
+					return;
+				}
+				supabaseUserId = existing.id;
+
+				// Update password to ensure it matches
+				const { error: pwError } = await supabase.auth.admin.updateUserById(
+					supabaseUserId,
+					{ password },
+				);
+				if (pwError) console.warn("Could not reset password:", pwError.message);
+				else console.log("✓ Reset Supabase auth password");
+			} else {
+				throw createError;
+			}
+		} else {
+			supabaseUserId = createData.user.id;
+			console.log("✓ Created Supabase auth user");
 		}
 
-		console.log("✓ Created Supabase auth user");
-
-		// Create user in database
+		// Upsert the database record using the Supabase Auth UID as the DB id
 		const user = await prisma.user.upsert({
-			where: { id: authData.user.id },
-			update: {
-				role: "ADMIN",
-				fullName,
-			},
+			where: { id: supabaseUserId },
+			update: { role: "ADMIN", fullName, email },
 			create: {
-				id: authData.user.id,
+				id: supabaseUserId,
 				email,
 				fullName,
 				role: "ADMIN",
 			},
 		});
 
-		console.log("✓ Created database user");
+		console.log("✓ Database record synced, id:", user.id);
 		console.log("\n=== Admin Credentials ===");
-		console.log("Email:", email);
+		console.log("Email   :", email);
 		console.log("Password:", password);
-		console.log("URL: http://localhost:3000/admin/login");
+		console.log("URL     : http://localhost:3000/admin/login");
 		console.log("========================\n");
 	} catch (error) {
 		console.error("Error:", error);

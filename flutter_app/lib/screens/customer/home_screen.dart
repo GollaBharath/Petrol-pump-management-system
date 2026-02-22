@@ -73,15 +73,6 @@ class HomeScreen extends ConsumerWidget {
             Navigator.of(context).pushNamed(AppRoutes.myOrders);
           },
         ),
-        const SizedBox(height: 16),
-        MenuCard(
-          icon: Icons.local_gas_station,
-          title: 'Fuel Prices',
-          subtitle: 'View current fuel prices',
-          onTap: () {
-            Navigator.of(context).pushNamed(AppRoutes.prices);
-          },
-        ),
       ],
     );
   }

@@ -26,10 +26,10 @@ import {
 	ResponsiveContainer,
 } from "recharts";
 import OrdersSection from "./sections/orders-section";
-import CashAdvancesSection from "./sections/cash-advances-section";
 import PriceManagementSection from "./sections/price-management-section";
 import BillingSection from "./sections/billing-section";
 import EmployeeActivitySection from "./sections/employee-activity-section";
+import UsersSection from "./sections/users-section";
 import DashboardStats from "./components/dashboard-stats";
 
 const CHART_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
@@ -56,8 +56,7 @@ export default function DashboardClient() {
 							Admin Dashboard
 						</h1>
 						<p className="text-slate-600 mt-2">
-							Manage orders, track cash advances, set prices, and monitor
-							operations
+							Manage orders, billing, set prices, and monitor operations
 						</p>
 					</div>
 					<button
@@ -72,10 +71,10 @@ export default function DashboardClient() {
 					<TabsList className="grid w-full grid-cols-6 mb-8">
 						<TabsTrigger value="overview">Overview</TabsTrigger>
 						<TabsTrigger value="orders">Orders</TabsTrigger>
-						<TabsTrigger value="cash-advances">Cash Advances</TabsTrigger>
 						<TabsTrigger value="prices">Prices</TabsTrigger>
 						<TabsTrigger value="billing">Billing</TabsTrigger>
 						<TabsTrigger value="employees">Employees</TabsTrigger>
+						<TabsTrigger value="users">Users</TabsTrigger>
 					</TabsList>
 
 					{/* Overview Tab */}
@@ -177,51 +176,12 @@ export default function DashboardClient() {
 									</ResponsiveContainer>
 								</CardContent>
 							</Card>
-
-							{/* Cash Advances Summary */}
-							<Card>
-								<CardHeader>
-									<CardTitle>Cash Advances Summary</CardTitle>
-									<CardDescription>Current status</CardDescription>
-								</CardHeader>
-								<CardContent className="space-y-4">
-									<div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-										<span className="font-medium text-orange-900">
-											Pending Reconciliation
-										</span>
-										<span className="text-2xl font-bold text-orange-600">
-											₹24,500
-										</span>
-									</div>
-									<div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-										<span className="font-medium text-green-900">
-											Total Disbursed (Month)
-										</span>
-										<span className="text-2xl font-bold text-green-600">
-											₹1,24,000
-										</span>
-									</div>
-									<div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-										<span className="font-medium text-blue-900">
-											Total Reconciled (Month)
-										</span>
-										<span className="text-2xl font-bold text-blue-600">
-											₹99,500
-										</span>
-									</div>
-								</CardContent>
-							</Card>
 						</div>
 					</TabsContent>
 
 					{/* Orders Tab */}
 					<TabsContent value="orders">
 						<OrdersSection />
-					</TabsContent>
-
-					{/* Cash Advances Tab */}
-					<TabsContent value="cash-advances">
-						<CashAdvancesSection />
 					</TabsContent>
 
 					{/* Price Management Tab */}
@@ -237,6 +197,11 @@ export default function DashboardClient() {
 					{/* Employee Activity Tab */}
 					<TabsContent value="employees">
 						<EmployeeActivitySection />
+					</TabsContent>
+
+					{/* Users Tab */}
+					<TabsContent value="users">
+						<UsersSection />
 					</TabsContent>
 				</Tabs>
 			</div>
