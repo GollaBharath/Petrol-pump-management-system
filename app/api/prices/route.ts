@@ -109,6 +109,7 @@ export async function GET(request: NextRequest) {
 
 		const latestPrices = await Promise.all(
 			prices.map(async (group) => {
+				if (!group._max.date) return null;
 				const price = await prisma.fuelPrice.findFirst({
 					where: {
 						fuelType: group.fuelType,

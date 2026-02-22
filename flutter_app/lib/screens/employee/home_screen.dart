@@ -142,7 +142,7 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
                 // Filter by status
                 final filteredByStatus = _showCompletedOrders
                     ? orders
-                        .where((order) => order.status == 'DELIVERED')
+                        .where((order) => order.status == 'COMPLETED')
                         .toList()
                     : orders
                         .where((order) => order.status == 'PENDING')

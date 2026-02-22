@@ -135,7 +135,7 @@ final createOrderProvider = FutureProvider.family<
       String fuelType,
       double? amountRequested,
       double? quantityRequested,
-      double cashAdvance,
+      int cash,
     })>((ref, params) async {
   final apiService = ref.watch(apiServiceProvider);
   final order = await apiService.createOrder(
@@ -143,7 +143,7 @@ final createOrderProvider = FutureProvider.family<
     fuelType: params.fuelType,
     amountRequested: params.amountRequested,
     quantityRequested: params.quantityRequested,
-    cashAdvance: params.cashAdvance,
+    cash: params.cash,
   );
 
   // Invalidate orders list to refetch

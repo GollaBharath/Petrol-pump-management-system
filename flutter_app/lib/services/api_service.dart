@@ -144,7 +144,7 @@ class ApiService {
     required String fuelType,
     double? amountRequested,
     double? quantityRequested,
-    required double cashAdvance,
+    required int cash,
   }) async {
     try {
       final response = await _dio.post(
@@ -154,7 +154,7 @@ class ApiService {
           'fuelType': fuelType,
           if (amountRequested != null) 'amountRequested': amountRequested,
           if (quantityRequested != null) 'quantityRequested': quantityRequested,
-          'cashAdvance': cashAdvance,
+          'cash': cash,
         },
       );
       final data = response.data as Map<String, dynamic>;

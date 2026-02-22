@@ -46,9 +46,6 @@ export async function GET(request: NextRequest) {
 			todayOrders,
 			weekOrdersByDay,
 			orderStatusCounts,
-			pendingCashAdvances,
-			monthCashAdvances,
-			billStats,
 		] = await Promise.all([
 			// All-time order count
 			prisma.order.count(),
@@ -56,17 +53,21 @@ export async function GET(request: NextRequest) {
 			// Currently pending orders
 			prisma.order.count({ where: { status: "PENDING" } }),
 
-			// Total paid revenue
-			prisma.bill.aggregate({
-				where: { status: "PAID" },
+			// Total revenue from delivered/completed orders
+			prisma.order.aggregate({
+				where: {
+					status: { in: ["DELIVERED", "COMPLETED"] },
+					totalAmount: { not: null },
+				},
 				_sum: { totalAmount: true },
 			}),
 
-			// Last month revenue for trend
-			prisma.bill.aggregate({
+			// Last month revenue for trend (based on delivery date)
+			prisma.order.aggregate({
 				where: {
-					status: "PAID",
-					paidAt: { gte: startOfLastMonth, lte: endOfLastMonth },
+					status: { in: ["DELIVERED", "COMPLETED"] },
+					deliveredAt: { gte: startOfLastMonth, lte: endOfLastMonth },
+					totalAmount: { not: null },
 				},
 				_sum: { totalAmount: true },
 			}),
@@ -96,38 +97,17 @@ export async function GET(request: NextRequest) {
 				by: ["status"],
 				_count: { id: true },
 			}),
-
-			// Cash advances pending reconciliation
-			prisma.cashAdvanceTransaction.aggregate({
-				where: { transactionType: "DISBURSED" },
-				_sum: { amount: true },
-			}),
-
-			// Cash advances this month
-			prisma.cashAdvanceTransaction.aggregate({
-				where: {
-					transactionType: "DISBURSED",
-					createdAt: { gte: startOfMonth },
-				},
-				_sum: { amount: true },
-			}),
-
-			// Bill statistics
-			prisma.bill.groupBy({
-				by: ["status"],
-				_count: { id: true },
-				_sum: { totalAmount: true },
-			}),
 		]);
 
 		const totalRevenueValue = totalRevenue._sum.totalAmount ?? 0;
 		const lastMonthRevenueValue = lastMonthRevenue._sum.totalAmount ?? 0;
 
 		// Revenue trend: if there was revenue last month, calculate % change v today's month
-		const currentMonthRevenue = await prisma.bill.aggregate({
+		const currentMonthRevenue = await prisma.order.aggregate({
 			where: {
-				status: "PAID",
-				paidAt: { gte: startOfMonth },
+				status: { in: ["DELIVERED", "COMPLETED"] },
+				deliveredAt: { gte: startOfMonth },
+				totalAmount: { not: null },
 			},
 			_sum: { totalAmount: true },
 		});
@@ -151,8 +131,8 @@ export async function GET(request: NextRequest) {
 				lastMonthRevenue: lastMonthRevenueValue,
 				revenueTrendPercent: revenueTrend,
 				employeeCount,
-				pendingCashAdvances: pendingCashAdvances._sum.amount ?? 0,
-				monthCashAdvances: monthCashAdvances._sum.amount ?? 0,
+				pendingCashAdvances: 0,
+				monthCashAdvances: 0,
 			},
 			charts: {
 				weekOrders: weekOrdersByDay.map((row) => ({
@@ -164,11 +144,7 @@ export async function GET(request: NextRequest) {
 					name: s.status,
 					value: s._count.id,
 				})),
-				billStats: billStats.map((b) => ({
-					status: b.status,
-					count: b._count.id,
-					total: b._sum.totalAmount ?? 0,
-				})),
+				billStats: [],
 			},
 		});
 	} catch (error: any) {

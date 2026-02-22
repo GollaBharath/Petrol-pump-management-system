@@ -6,7 +6,6 @@ import {
 	errorResponse,
 	requireRole,
 } from "@/lib/auth";
-import { MarkOrderDeliveredSchema } from "@/lib/validation";
 
 /**
  * GET /api/orders/pending

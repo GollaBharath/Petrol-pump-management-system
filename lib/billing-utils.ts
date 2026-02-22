@@ -1,479 +1,165 @@
 /**
- * Billing System with Price-Aware Calculations
+ * Billing / Payment System
  *
- * Handles bill generation and calculation based on:
- * - Quantity delivered (or amount converted at delivery price)
- * - Price on the day of delivery
- * - Cash advance given to driver
- * - Final settlement amount due from customer
+ * Customer balance model:
+ *   - When an order is COMPLETED the balance is DECREMENTED by totalAmount
+ *   - When a payment is recorded the balance is INCREMENTED (debt reduced)
+ *   - Negative balance → customer owes money
+ *   - Positive balance → customer has credit
  */
 
 import { prisma } from "@/lib/prisma";
+import { PaymentMethod } from "@prisma/client";
 
-export interface BillCalculation {
-	orderId: string;
-	customerId: string;
-	fuelType: string;
-	quantityDelivered: number;
-	pricePerLiterAtDelivery: number;
-	totalAmount: number;
-	cashAdvanceAmount: number;
-	settlementAmount: number;
-	generatedAt: string;
-}
+// ─── Record Payment ────────────────────────────────────────────────────────────
 
 /**
- * Calculate bill amount based on delivery quantity and price
- * Converts amount-based orders to quantity using delivery price
+ * Record a customer payment and update their running balance.
  */
-export async function calculateBillAmount(
-	orderId: string,
-): Promise<BillCalculation> {
-	// Fetch order with customer and delivery details
-	const order = await prisma.order.findUnique({
-		where: { id: orderId },
-		include: {
-			customer: true,
-			cashAdvance: true,
-		},
-	});
-
-	if (!order) {
-		throw new Error(`Order not found: ${orderId}`);
-	}
-
-	if (order.status !== "DELIVERED" || !order.deliveredAt) {
-		throw new Error(
-			`Order must be delivered before bill generation: ${orderId}`,
-		);
-	}
-
-	// Get the price on delivery date
-	const deliveryDate = order.deliveredAt;
-	const priceRecord = await prisma.fuelPrice.findFirst({
-		where: {
-			fuelType: order.fuelType,
-			date: {
-				lte: deliveryDate,
-			},
-		},
-		orderBy: {
-			date: "desc",
-		},
-	});
-
-	if (!priceRecord) {
-		throw new Error(
-			`No price record found for ${order.fuelType} on or before ${deliveryDate.toISOString()}`,
-		);
-	}
-
-	const pricePerLiter = priceRecord.pricePerLiter;
-
-	// Calculate quantity delivered
-	let quantityDelivered: number;
-	if (order.quantityOrdered) {
-		// Quantity-based order
-		quantityDelivered = order.quantityOrdered;
-	} else if (order.amountOrdered) {
-		// Amount-based order: convert to quantity using delivery price
-		quantityDelivered = order.amountOrdered / pricePerLiter;
-	} else {
-		throw new Error(`Order has neither quantity nor amount: ${orderId}`);
-	}
-
-	// Calculate total amount
-	const totalAmount = quantityDelivered * pricePerLiter;
-
-	// Get cash advance amount
-	const cashAdvanceAmount = order.cashAdvance?.amount || 0;
-
-	// Calculate settlement amount (what customer owes)
-	const settlementAmount = totalAmount - cashAdvanceAmount;
-
-	return {
-		orderId: order.id,
-		customerId: order.customerId,
-		fuelType: order.fuelType,
-		quantityDelivered,
-		pricePerLiterAtDelivery: pricePerLiter,
-		totalAmount,
-		cashAdvanceAmount,
-		settlementAmount,
-		generatedAt: new Date().toISOString(),
-	};
-}
-
-/**
- * Generate a bill for a delivered order
- * Automatically calculates all amounts and creates bill record
- */
-export async function generateBill(orderId: string, createdBy: string) {
-	// Calculate bill details
-	const calculation = await calculateBillAmount(orderId);
-
-	// Check if bill already exists
-	const existingBill = await prisma.bill.findFirst({
-		where: { orderId },
-	});
-
-	if (existingBill) {
-		throw new Error(`Bill already exists for order ${orderId}`);
-	}
-
-	// Get cash advance transaction ID if exists
-	const cashAdvanceTransaction = await prisma.cashAdvanceTransaction.findFirst({
-		where: {
-			orderId: orderId,
-			type: "DISBURSED",
-		},
-	});
-
-	// Create bill
-	const bill = await prisma.bill.create({
-		data: {
-			orderId: calculation.orderId,
-			customerId: calculation.customerId,
-			quantityDelivered: calculation.quantityDelivered,
-			pricePerLiterAtDelivery: calculation.pricePerLiterAtDelivery,
-			totalAmount: calculation.totalAmount,
-			cashAdvanceAmount: calculation.cashAdvanceAmount,
-			settlementAmount: calculation.settlementAmount,
-			status: "PENDING",
-			createdBy: createdBy,
-			cashAdvanceId: cashAdvanceTransaction?.id,
-		},
-		include: {
-			order: {
-				select: {
-					customer: true,
-					fuelType: true,
-				},
-			},
-		},
-	});
-
-	// Log audit entry
-	await prisma.auditLog.create({
-		data: {
-			action: "BILL_GENERATED",
-			resource: "Bill",
-			resourceId: bill.id,
-			performedBy: createdBy,
-			details: {
-				orderId,
-				totalAmount: calculation.totalAmount,
-				settlementAmount: calculation.settlementAmount,
-			},
-		},
-	});
-
-	return bill;
-}
-
-/**
- * Mark a bill as paid
- */
-export async function markBillAsPaid(
-	billId: string,
-	paidBy: string,
-	paymentMethod: string = "CASH",
+export async function recordPayment(
+	customerProfileId: string,
+	amount: number,
+	paymentMethod?: PaymentMethod,
+	options?: {
+		paymentMethodNote?: string;
+		reference?: string;
+		notes?: string;
+		paymentDate?: Date;
+	},
 ) {
-	const bill = await prisma.bill.findUnique({
-		where: { id: billId },
+	const profile = await prisma.customerProfile.findUnique({
+		where: { id: customerProfileId },
 	});
 
-	if (!bill) {
-		throw new Error(`Bill not found: ${billId}`);
+	if (!profile) {
+		throw new Error(`Customer profile not found: ${customerProfileId}`);
 	}
 
-	if (bill.status === "PAID") {
-		throw new Error(`Bill is already paid: ${billId}`);
-	}
-
-	// Update bill status
-	const updatedBill = await prisma.bill.update({
-		where: { id: billId },
-		data: {
-			status: "PAID",
-			paidAt: new Date(),
-			paymentMethod,
-		},
-		include: {
-			order: {
-				select: {
-					customer: true,
-					fuelType: true,
-				},
-			},
-		},
-	});
-
-	// Log audit entry
-	await prisma.auditLog.create({
-		data: {
-			action: "BILL_PAID",
-			resource: "Bill",
-			resourceId: billId,
-			performedBy: paidBy,
-			details: {
-				paymentMethod,
-				amount: bill.settlementAmount,
-			},
-		},
-	});
-
-	// If cash advance was used, update it as reconciled
-	if (bill.cashAdvanceId) {
-		await prisma.cashAdvanceTransaction.update({
-			where: { id: bill.cashAdvanceId },
+	return prisma.$transaction(async (tx) => {
+		const payment = await tx.payment.create({
 			data: {
-				type: "RECONCILED",
-				billId: billId,
+				customerProfileId,
+				amount,
+				paymentMethod,
+				paymentMethodNote: options?.paymentMethodNote,
+				reference: options?.reference,
+				notes: options?.notes,
+				paymentDate: options?.paymentDate ?? new Date(),
+			},
+			include: {
+				customerProfile: {
+					include: {
+						user: {
+							select: { id: true, fullName: true, email: true },
+						},
+					},
+				},
 			},
 		});
-	}
 
-	return updatedBill;
+		await tx.customerProfile.update({
+			where: { id: customerProfileId },
+			data: {
+				currentBalance: { increment: amount },
+				totalPayments: { increment: amount },
+			},
+		});
+
+		return payment;
+	});
 }
 
+// ─── Reverse Payment ───────────────────────────────────────────────────────────
+
 /**
- * Get bill details with all related information
+ * Reverse a previously recorded payment and restore the customer's debt.
  */
-export async function getBillDetails(billId: string) {
-	const bill = await prisma.bill.findUnique({
-		where: { id: billId },
+export async function reversePayment(paymentId: string) {
+	const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+
+	if (!payment) {
+		throw new Error(`Payment not found: ${paymentId}`);
+	}
+
+	await prisma.$transaction(async (tx) => {
+		await tx.payment.delete({ where: { id: paymentId } });
+		await tx.customerProfile.update({
+			where: { id: payment.customerProfileId },
+			data: {
+				currentBalance: { decrement: payment.amount },
+				totalPayments: { decrement: payment.amount },
+			},
+		});
+	});
+
+	return payment;
+}
+
+// ─── Customer Balance Summary ──────────────────────────────────────────────────
+
+export async function getCustomerBalanceSummary(userId: string) {
+	const profile = await prisma.customerProfile.findUnique({
+		where: { userId },
 		include: {
-			order: {
-				select: {
-					id: true,
-					customerId: true,
-					fuelType: true,
-					quantityOrdered: true,
-					amountOrdered: true,
-					status: true,
-					createdAt: true,
-					deliveredAt: true,
-				},
-			},
-			customer: {
-				select: {
-					id: true,
-					name: true,
-					email: true,
-					phone: true,
-				},
-			},
-			cashAdvance: true,
+			user: { select: { id: true, fullName: true, email: true } },
+			payments: { orderBy: { paymentDate: "desc" }, take: 10 },
 		},
 	});
 
-	if (!bill) {
-		throw new Error(`Bill not found: ${billId}`);
+	if (!profile) {
+		throw new Error(`Customer profile not found for user: ${userId}`);
 	}
 
-	return bill;
-}
-
-/**
- * Get all pending bills (awaiting payment)
- */
-export async function getPendingBills(limit: number = 50, offset: number = 0) {
-	const [bills, total] = await Promise.all([
-		prisma.bill.findMany({
-			where: { status: "PENDING" },
-			include: {
-				customer: {
-					select: {
-						name: true,
-						email: true,
-					},
-				},
-				order: {
-					select: {
-						id: true,
-						fuelType: true,
-					},
-				},
-			},
-			orderBy: { createdAt: "desc" },
-			take: limit,
-			skip: offset,
-		}),
-		prisma.bill.count({ where: { status: "PENDING" } }),
-	]);
-
 	return {
-		bills,
-		total,
-		page: Math.floor(offset / limit) + 1,
-		pageSize: limit,
+		userId,
+		customerProfileId: profile.id,
+		currentBalance: profile.currentBalance,
+		totalOrders: profile.totalOrders,
+		totalPurchases: profile.totalPurchases,
+		totalPayments: profile.totalPayments,
+		outstanding: Math.max(0, -profile.currentBalance),
+		credit: Math.max(0, profile.currentBalance),
+		recentPayments: profile.payments,
 	};
 }
 
-/**
- * Get all overdue bills (past due date)
- */
-export async function getOverdueBills(limit: number = 50, offset: number = 0) {
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+// ─── Outstanding Balances ──────────────────────────────────────────────────────
 
-	const [bills, total] = await Promise.all([
-		prisma.bill.findMany({
-			where: {
-				status: "PENDING",
-				dueDate: {
-					lt: today,
-				},
+export async function getOutstandingBalances() {
+	const profiles = await prisma.customerProfile.findMany({
+		where: { currentBalance: { lt: 0 } },
+		include: {
+			user: {
+				select: { id: true, fullName: true, email: true, phone: true },
 			},
-			include: {
-				customer: {
-					select: {
-						name: true,
-						email: true,
-					},
-				},
-				order: {
-					select: {
-						id: true,
-						fuelType: true,
-					},
-				},
-			},
-			orderBy: { dueDate: "asc" },
-			take: limit,
-			skip: offset,
-		}),
-		prisma.bill.count({
-			where: {
-				status: "PENDING",
-				dueDate: {
-					lt: today,
-				},
-			},
-		}),
-	]);
+		},
+		orderBy: { currentBalance: "asc" },
+	});
 
-	return {
-		bills,
-		total,
-		page: Math.floor(offset / limit) + 1,
-		pageSize: limit,
-	};
+	return profiles.map((p) => ({
+		customerProfileId: p.id,
+		userId: p.userId,
+		fullName: p.user.fullName,
+		email: p.user.email,
+		phone: p.user.phone,
+		currentBalance: p.currentBalance,
+		outstanding: Math.abs(p.currentBalance),
+		totalPurchases: p.totalPurchases,
+		totalPayments: p.totalPayments,
+	}));
 }
 
-/**
- * Get bills for a specific customer
- */
-export async function getCustomerBills(
-	customerId: string,
-	limit: number = 50,
-	offset: number = 0,
+// ─── Legacy no-ops (kept so old imports don't break at compile time) ───────────
+/** @deprecated Bills no longer exist in the schema; use recordPayment instead */
+export async function generateBill(_orderId: string, _createdBy: string) {
+	throw new Error("Bills have been removed. Use recordPayment() instead.");
+}
+
+/** @deprecated Bills no longer exist in the schema; use recordPayment instead */
+export async function markBillAsPaid(
+	_billId: string,
+	_paidBy: string,
+	_paymentMethod?: string,
 ) {
-	const [bills, total] = await Promise.all([
-		prisma.bill.findMany({
-			where: { customerId },
-			include: {
-				order: {
-					select: {
-						id: true,
-						fuelType: true,
-						quantityOrdered: true,
-						amountOrdered: true,
-					},
-				},
-			},
-			orderBy: { createdAt: "desc" },
-			take: limit,
-			skip: offset,
-		}),
-		prisma.bill.count({ where: { customerId } }),
-	]);
-
-	return {
-		bills,
-		total,
-		page: Math.floor(offset / limit) + 1,
-		pageSize: limit,
-	};
-}
-
-/**
- * Get billing summary for a date range
- */
-export async function getBillingReport(startDate: Date, endDate: Date) {
-	const bills = await prisma.bill.findMany({
-		where: {
-			createdAt: {
-				gte: startDate,
-				lte: endDate,
-			},
-		},
-	});
-
-	const totalBills = bills.length;
-	const paidBills = bills.filter((b) => b.status === "PAID").length;
-	const pendingBills = bills.filter((b) => b.status === "PENDING").length;
-
-	const totalRevenue = bills.reduce((sum, bill) => sum + bill.totalAmount, 0);
-	const totalSettled = bills
-		.filter((b) => b.status === "PAID")
-		.reduce((sum, bill) => sum + bill.settlementAmount, 0);
-	const totalOutstanding = bills
-		.filter((b) => b.status === "PENDING")
-		.reduce((sum, bill) => sum + bill.settlementAmount, 0);
-
-	const averageBillAmount = totalBills > 0 ? totalRevenue / totalBills : 0;
-
-	return {
-		period: {
-			start: startDate.toISOString().split("T")[0],
-			end: endDate.toISOString().split("T")[0],
-		},
-		totalBills,
-		paidBills,
-		pendingBills,
-		totalRevenue,
-		totalSettled,
-		totalOutstanding,
-		averageBillAmount,
-		paymentRate: totalBills > 0 ? (paidBills / totalBills) * 100 : 0,
-	};
-}
-
-/**
- * Auto-generate bills for all delivered orders without bills
- * Run this periodically or after orders are marked delivered
- */
-export async function autoGenerateMissingBills(createdBy: string) {
-	// Find all delivered orders without bills
-	const ordersNeedingBills = await prisma.order.findMany({
-		where: {
-			status: "DELIVERED",
-			bill: null,
-		},
-		select: { id: true },
-	});
-
-	const results = {
-		total: ordersNeedingBills.length,
-		success: 0,
-		failed: 0,
-		errors: [] as Array<{ orderId: string; error: string }>,
-	};
-
-	for (const order of ordersNeedingBills) {
-		try {
-			await generateBill(order.id, createdBy);
-			results.success++;
-		} catch (error) {
-			results.failed++;
-			results.errors.push({
-				orderId: order.id,
-				error: error instanceof Error ? error.message : "Unknown error",
-			});
-		}
-	}
-
-	return results;
+	throw new Error("Bills have been removed. Use recordPayment() instead.");
 }

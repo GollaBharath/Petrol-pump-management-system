@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
-import { SignupSchema, LoginSchema } from "@/lib/validation";
+import { SignupSchema } from "@/lib/validation";
 import { successResponse, errorResponse } from "@/lib/auth";
 
 const supabase = createClient(

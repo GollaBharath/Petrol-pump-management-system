@@ -6,8 +6,8 @@ import {
 	successResponse,
 	errorResponse,
 } from "@/lib/auth";
-import { MarkBillPaidSchema } from "@/lib/validation";
 import { createAuditLog } from "@/lib/db-utils";
+import { reversePayment } from "@/lib/billing-utils";
 
 interface RouteParams {
 	params: {
@@ -17,7 +17,7 @@ interface RouteParams {
 
 /**
  * GET /api/bills/[id]
- * Get bill details
+ * Get payment details
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
 	try {
@@ -27,12 +27,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 		const authRequest = authResult as any;
 		const { id } = params;
 
-		const bill = await prisma.bill.findUnique({
+		const payment = await prisma.payment.findUnique({
 			where: { id },
 			include: {
-				order: {
+				customerProfile: {
 					include: {
-						customer: {
+						user: {
 							select: {
 								id: true,
 								fullName: true,
@@ -45,30 +45,32 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 			},
 		});
 
-		if (!bill) {
-			return errorResponse("Bill not found", 404);
+		if (!payment) {
+			return errorResponse("Payment not found", 404);
 		}
 
-		// Check access: customer can see their own bills
-		if (
-			authRequest.user.role === "CUSTOMER" &&
-			bill.order.customerId !== authRequest.user.id
-		) {
-			return errorResponse("Unauthorized", 403);
+		// Check access: customer can only see payments on their own profile
+		if (authRequest.user.role === "CUSTOMER") {
+			const profile = await prisma.customerProfile.findUnique({
+				where: { userId: authRequest.user.id },
+			});
+			if (!profile || profile.id !== payment.customerProfileId) {
+				return errorResponse("Unauthorized", 403);
+			}
 		}
 
-		return successResponse({ bill });
+		return successResponse({ payment });
 	} catch (error: any) {
-		console.error("Bill fetch error:", error);
-		return errorResponse("Failed to fetch bill", 500);
+		console.error("Payment fetch error:", error);
+		return errorResponse("Failed to fetch payment", 500);
 	}
 }
 
 /**
- * PATCH /api/bills/[id]/mark-paid
- * Mark bill as paid (admins only)
+ * DELETE /api/bills/[id]
+ * Reverse / delete a payment (admins only)
  */
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
 	try {
 		const authResult = await authenticate(request);
 		if (authResult instanceof NextResponse) return authResult;
@@ -78,65 +80,23 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 		if (roleCheck) return roleCheck;
 
 		const { id } = params;
-		const body = await request.json();
-		const validatedData = MarkBillPaidSchema.parse(body);
+		const reversed = await reversePayment(id);
 
-		const bill = await prisma.bill.findUnique({
-			where: { id },
-		});
-
-		if (!bill) {
-			return errorResponse("Bill not found", 404);
-		}
-
-		if (bill.status === "PAID") {
-			return errorResponse("Bill is already paid", 400);
-		}
-
-		const updatedBill = await prisma.bill.update({
-			where: { id },
-			data: {
-				status: "PAID",
-				paidAt: new Date(),
+		await createAuditLog(
+			authRequest.user.id,
+			"PAYMENT_REVERSED",
+			"payments",
+			id,
+			{
+				customerProfileId: reversed.customerProfileId,
+				amount: reversed.amount,
+				timestamp: new Date().toISOString(),
 			},
-			include: {
-				order: {
-					include: {
-						customer: {
-							select: {
-								id: true,
-								fullName: true,
-								email: true,
-							},
-						},
-					},
-				},
-			},
-		});
+		);
 
-		// Update order status to PAID
-		await prisma.order.update({
-			where: { id: bill.orderId },
-			data: { status: "PAID" },
-		});
-
-		// Log this action
-		await createAuditLog(authRequest.user.id, "BILL_MARKED_PAID", "bills", id, {
-			amount: bill.netAmount,
-			paymentMethod: validatedData.paymentMethod,
-			notes: validatedData.notes,
-			timestamp: new Date().toISOString(),
-		});
-
-		return successResponse({
-			message: "Bill marked as paid",
-			bill: updatedBill,
-		});
+		return successResponse({ message: "Payment reversed successfully" });
 	} catch (error: any) {
-		console.error("Bill payment error:", error);
-		if (error.name === "ZodError") {
-			return errorResponse("Validation error", 400, error.errors);
-		}
-		return errorResponse("Failed to mark bill as paid", 500);
+		console.error("Payment reverse error:", error);
+		return errorResponse(error.message || "Failed to reverse payment", 500);
 	}
 }

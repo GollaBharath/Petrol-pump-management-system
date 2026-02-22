@@ -32,8 +32,6 @@ import EmployeeActivitySection from "./sections/employee-activity-section";
 import UsersSection from "./sections/users-section";
 import DashboardStats from "./components/dashboard-stats";
 
-const CHART_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
-
 export default function DashboardClient() {
 	const [activeTab, setActiveTab] = useState("overview");
 	const router = useRouter();
@@ -169,7 +167,9 @@ export default function DashboardClient() {
 											<XAxis dataKey="week" />
 											<YAxis />
 											<Tooltip
-												formatter={(value) => `₹${value.toLocaleString()}`}
+												formatter={(value) =>
+													`₹${Number(value ?? 0).toLocaleString()}`
+												}
 											/>
 											<Bar dataKey="revenue" fill="#3b82f6" />
 										</BarChart>

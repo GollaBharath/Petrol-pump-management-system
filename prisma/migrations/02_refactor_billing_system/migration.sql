@@ -12,8 +12,34 @@ ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "total_amount" DOUBLE PRECISION;
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "completed_at" TIMESTAMP(3);
 
 -- Update OrderStatus enum - Remove BILLED and PAID, add COMPLETED
--- First, update existing rows
-UPDATE "orders" SET "status" = 'COMPLETED' WHERE "status" IN ('BILLED', 'PAID');
+DO $$ BEGIN
+    CREATE TYPE "OrderStatus_new" AS ENUM ('PENDING', 'DELIVERED', 'COMPLETED');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Convert existing rows: BILLED/PAID → COMPLETED, then swap the enum type
+ALTER TABLE "orders" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "orders" ALTER COLUMN "status" TYPE "OrderStatus_new"
+    USING (
+        CASE "status"::text
+            WHEN 'BILLED'    THEN 'COMPLETED'
+            WHEN 'PAID'      THEN 'COMPLETED'
+            ELSE "status"::text
+        END
+    )::"OrderStatus_new";
+
+DO $$ BEGIN
+    ALTER TYPE "OrderStatus" RENAME TO "OrderStatus_old";
+EXCEPTION
+    WHEN undefined_object THEN null;
+END $$;
+
+ALTER TYPE "OrderStatus_new" RENAME TO "OrderStatus";
+
+DROP TYPE IF EXISTS "OrderStatus_old";
+
+ALTER TABLE "orders" ALTER COLUMN "status" SET DEFAULT 'PENDING';
 
 -- Add index for vehicle_number
 CREATE INDEX IF NOT EXISTS "orders_vehicle_number_idx" ON "orders"("vehicle_number");

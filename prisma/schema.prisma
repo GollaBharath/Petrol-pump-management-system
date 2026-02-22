@@ -87,6 +87,7 @@ model Order {
   fuelType              FuelType    @map("fuel_type")
   amountRequested       Float?      @map("amount_requested") // Amount in INR if customer pays by amount
   quantityRequested     Float?      @map("quantity_requested") // Quantity in liters if customer pays by quantity
+  cash                  Int         @default(0) // Extra cash added to total cost (in INR)
   quantityDelivered     Float?      @map("quantity_delivered") // Actual quantity delivered
   pricePerLiter         Float?      @map("price_per_liter") // Price at time of delivery
   totalAmount           Float?      @map("total_amount") // quantityDelivered * pricePerLiter

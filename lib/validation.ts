@@ -27,9 +27,10 @@ export const CreateOrderSchema = z
 			.number()
 			.positive("Quantity must be positive")
 			.optional(),
-		cashAdvance: z
+		cash: z
 			.number()
-			.min(0, "Cash advance cannot be negative")
+			.int("Cash must be a whole number")
+			.min(0, "Cash cannot be negative")
 			.default(0),
 	})
 	.refine((data) => data.amountRequested || data.quantityRequested, {
@@ -42,7 +43,7 @@ export const CreateOrderSchema = z
 	});
 
 export const UpdateOrderStatusSchema = z.object({
-	status: z.enum(["PENDING", "DELIVERED", "BILLED", "PAID"]),
+	status: z.enum(["PENDING", "DELIVERED", "COMPLETED"]),
 	deliveredAt: z.date().optional(),
 });
 
@@ -57,16 +58,26 @@ export const SetFuelPriceSchema = z.object({
 	date: z.date().optional(), // Defaults to today
 });
 
-// Bill schemas
-export const CreateBillSchema = z.object({
-	orderId: z.string().uuid("Invalid order ID"),
-	quantityDelivered: z.number().positive("Quantity must be positive"),
-	adjustments: z.number().default(0),
+// Payment schemas (replaces old bill/cash-advance schemas)
+export const CreatePaymentSchema = z.object({
+	customerProfileId: z.string().min(1, "Customer profile ID is required"),
+	amount: z.number().positive("Amount must be positive"),
+	paymentMethod: z
+		.enum(["CASH", "BANK_TRANSFER", "CHEQUE", "UPI", "OTHER"])
+		.optional(),
+	paymentMethodNote: z.string().optional(),
+	reference: z.string().optional(),
+	notes: z.string().optional(),
+	paymentDate: z.string().optional(), // ISO date string
 });
 
-export const MarkBillPaidSchema = z.object({
-	paymentMethod: z.enum(["CASH", "CARD", "UPI", "CHEQUE"]).optional(),
-	notes: z.string().optional(),
+export const PaymentFilterSchema = z.object({
+	customerProfileId: z.string().optional(),
+	paymentMethod: z
+		.enum(["CASH", "BANK_TRANSFER", "CHEQUE", "UPI", "OTHER"])
+		.optional(),
+	limit: z.number().int().min(1).max(100).default(20),
+	offset: z.number().int().min(0).default(0),
 });
 
 // Pagination schema
@@ -77,15 +88,9 @@ export const PaginationSchema = z.object({
 
 // Filter schemas
 export const OrderFilterSchema = z.object({
-	status: z.enum(["PENDING", "DELIVERED", "BILLED", "PAID"]).optional(),
+	status: z.enum(["PENDING", "DELIVERED", "COMPLETED"]).optional(),
 	fuelType: z.enum(["PETROL", "DIESEL"]).optional(),
 	customerId: z.string().optional(),
-	limit: z.number().int().min(1).max(100).default(20),
-	offset: z.number().int().min(0).default(0),
-});
-
-export const BillFilterSchema = z.object({
-	status: z.enum(["PENDING", "BILLED", "PAID"]).optional(),
 	limit: z.number().int().min(1).max(100).default(20),
 	offset: z.number().int().min(0).default(0),
 });
@@ -97,7 +102,6 @@ export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
 export type UpdateOrderStatusInput = z.infer<typeof UpdateOrderStatusSchema>;
 export type MarkOrderDeliveredInput = z.infer<typeof MarkOrderDeliveredSchema>;
 export type SetFuelPriceInput = z.infer<typeof SetFuelPriceSchema>;
-export type CreateBillInput = z.infer<typeof CreateBillSchema>;
-export type MarkBillPaidInput = z.infer<typeof MarkBillPaidSchema>;
+export type CreatePaymentInput = z.infer<typeof CreatePaymentSchema>;
+export type PaymentFilterInput = z.infer<typeof PaymentFilterSchema>;
 export type OrderFilterInput = z.infer<typeof OrderFilterSchema>;
-export type BillFilterInput = z.infer<typeof BillFilterSchema>;

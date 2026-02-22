@@ -104,8 +104,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 			return errorResponse("No fuel price available", 400);
 		}
 
-		// Calculate total amount
-		const totalAmount = validatedData.quantityDelivered * pricePerLiter;
+		// Calculate total amount (fuel cost + cash)
+		const totalAmount =
+			validatedData.quantityDelivered * pricePerLiter + (order.cash ?? 0);
 
 		// Update order and customer profile in a transaction
 		const result = await prisma.$transaction(async (tx) => {
@@ -157,6 +158,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 			quantityDelivered: validatedData.quantityDelivered,
 			pricePerLiter,
 			totalAmount,
+			cash: order.cash ?? 0,
 			previousStatus: order.status,
 			timestamp: new Date().toISOString(),
 		});

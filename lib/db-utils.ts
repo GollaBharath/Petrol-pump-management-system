@@ -49,6 +49,7 @@ export async function getLatestPrices() {
 
 	const prices = await Promise.all(
 		latestPrices.map(async (group) => {
+			if (!group._max.date) return null;
 			const price = await prisma.fuelPrice.findFirst({
 				where: {
 					fuelType: group.fuelType,
@@ -138,33 +139,6 @@ export async function getPendingOrders() {
 }
 
 /**
- * Get delivered orders ready for billing
- */
-export async function getDeliveredOrdersForBilling() {
-	return prisma.order.findMany({
-		where: {
-			status: OrderStatus.DELIVERED,
-			bills: {
-				none: {}, // Orders without bills
-			},
-		},
-		include: {
-			customer: {
-				select: {
-					id: true,
-					fullName: true,
-					phone: true,
-					email: true,
-				},
-			},
-		},
-		orderBy: {
-			deliveredAt: "asc",
-		},
-	});
-}
-
-/**
  * Get customer's orders
  */
 export async function getCustomerOrders(customerId: string) {
@@ -172,9 +146,7 @@ export async function getCustomerOrders(customerId: string) {
 		where: {
 			customerId,
 		},
-		include: {
-			bills: true,
-		},
+		include: {},
 		orderBy: {
 			createdAt: "desc",
 		},
@@ -212,7 +184,6 @@ export async function getAllOrders(
 						email: true,
 					},
 				},
-				bills: true,
 			},
 			orderBy: {
 				createdAt: "desc",
@@ -265,232 +236,6 @@ export async function updateOrderStatus(
 	});
 
 	return updated;
-}
-
-/**
- * Disburse a cash advance for an order
- * Records when an employee receives cash before delivering fuel
- */
-export async function disburseCashAdvance(
-	orderId: string,
-	employeeId: string,
-	amount: number,
-	description?: string,
-) {
-	// Verify order exists
-	const order = await prisma.order.findUnique({
-		where: { id: orderId },
-	});
-
-	if (!order) {
-		throw new Error("Order not found");
-	}
-
-	// Record the cash advance transaction
-	const transaction = await prisma.cashAdvanceTransaction.create({
-		data: {
-			orderId,
-			employeeId,
-			amount,
-			transactionType: "DISBURSED",
-			description: description || `Cash advance for order ${orderId}`,
-		},
-	});
-
-	// Update order with cash advance amount
-	await prisma.order.update({
-		where: { id: orderId },
-		data: {
-			cashAdvance: amount,
-		},
-	});
-
-	return transaction;
-}
-
-/**
- * Get cash advance summary for an employee
- * Shows total disbursed, reconciled, and outstanding amounts
- */
-export async function getEmployeeCashAdvanceSummary(employeeId: string) {
-	const transactions = await prisma.cashAdvanceTransaction.findMany({
-		where: { employeeId },
-		include: {
-			employee: {
-				select: {
-					id: true,
-					fullName: true,
-					email: true,
-				},
-			},
-		},
-		orderBy: {
-			createdAt: "desc",
-		},
-	});
-
-	const disbursed = transactions
-		.filter((t) => t.transactionType === "DISBURSED")
-		.reduce((sum, t) => sum + t.amount, 0);
-
-	const reconciled = transactions
-		.filter((t) => t.transactionType === "RECONCILED")
-		.reduce((sum, t) => sum + t.amount, 0);
-
-	const outstanding = disbursed - reconciled;
-
-	return {
-		employeeId,
-		employeeName: transactions[0]?.employee?.fullName || "Unknown",
-		totalDisbursed: disbursed,
-		totalReconciled: reconciled,
-		outstandingAmount: outstanding,
-		transactionCount: transactions.length,
-		transactions,
-	};
-}
-
-/**
- * Get all pending cash advances (not yet reconciled)
- */
-export async function getPendingCashAdvances(limit: number = 100) {
-	const pendingTransactions = await prisma.cashAdvanceTransaction.findMany({
-		where: {
-			transactionType: "DISBURSED",
-			reconciliationBillId: null, // Not reconciled yet
-		},
-		include: {
-			employee: {
-				select: {
-					id: true,
-					fullName: true,
-					email: true,
-				},
-			},
-		},
-		orderBy: {
-			createdAt: "desc",
-		},
-		take: limit,
-	});
-
-	const totalOutstanding = pendingTransactions.reduce(
-		(sum, t) => sum + t.amount,
-		0,
-	);
-
-	return {
-		pendingCount: pendingTransactions.length,
-		totalOutstanding,
-		transactions: pendingTransactions,
-	};
-}
-
-/**
- * Reconcile cash advance against a bill
- * Links a cash advance transaction to a bill payment
- */
-export async function reconcileCashAdvance(
-	transactionId: string,
-	billId: string,
-	amount: number,
-) {
-	// Verify bill exists
-	const bill = await prisma.bill.findUnique({
-		where: { id: billId },
-	});
-
-	if (!bill) {
-		throw new Error("Bill not found");
-	}
-
-	// Update transaction to mark as reconciled
-	const transaction = await prisma.cashAdvanceTransaction.update({
-		where: { id: transactionId },
-		data: {
-			transactionType: "RECONCILED",
-			reconciliationBillId: billId,
-			description: `Reconciled against bill ${billId}`,
-		},
-	});
-
-	return transaction;
-}
-
-/**
- * Get cash advance report for admin dashboard
- * Aggregates daily cash advances and reconciliations
- */
-export async function getCashAdvanceReport(startDate: Date, endDate: Date) {
-	const transactions = await prisma.cashAdvanceTransaction.findMany({
-		where: {
-			createdAt: {
-				gte: startDate,
-				lte: endDate,
-			},
-		},
-		include: {
-			employee: {
-				select: {
-					id: true,
-					fullName: true,
-				},
-			},
-		},
-		orderBy: {
-			createdAt: "desc",
-		},
-	});
-
-	const disbursements = transactions.filter(
-		(t) => t.transactionType === "DISBURSED",
-	);
-	const reconciliations = transactions.filter(
-		(t) => t.transactionType === "RECONCILED",
-	);
-
-	const totalDisbursed = disbursements.reduce((sum, t) => sum + t.amount, 0);
-	const totalReconciled = reconciliations.reduce((sum, t) => sum + t.amount, 0);
-
-	// Group by employee
-	const byEmployee: { [key: string]: any } = {};
-	disbursements.forEach((t) => {
-		if (!byEmployee[t.employeeId]) {
-			byEmployee[t.employeeId] = {
-				employeeId: t.employeeId,
-				employeeName: t.employee?.fullName,
-				disbursed: 0,
-				reconciled: 0,
-				outstanding: 0,
-			};
-		}
-		byEmployee[t.employeeId].disbursed += t.amount;
-	});
-
-	reconciliations.forEach((t) => {
-		if (byEmployee[t.employeeId]) {
-			byEmployee[t.employeeId].reconciled += t.amount;
-		}
-	});
-
-	Object.keys(byEmployee).forEach((empId) => {
-		byEmployee[empId].outstanding =
-			byEmployee[empId].disbursed - byEmployee[empId].reconciled;
-	});
-
-	return {
-		period: {
-			startDate,
-			endDate,
-		},
-		summary: {
-			totalDisbursed,
-			totalReconciled,
-			totalOutstanding: totalDisbursed - totalReconciled,
-		},
-		byEmployee: Object.values(byEmployee),
-		transactionCount: transactions.length,
-	};
 }
 
 /**

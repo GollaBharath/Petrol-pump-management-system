@@ -73,7 +73,7 @@ class OrderCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const OrderCard({Key? key, required this.order, required this.onTap})
-    : super(key: key);
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -182,12 +182,12 @@ class OrderCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Cash Advance',
+                        'Cash',
                         style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '₹${order.cashAdvance}',
+                        '₹${order.cash}',
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -207,9 +207,7 @@ class OrderCard extends StatelessWidget {
         return Colors.orange;
       case 'DELIVERED':
         return Colors.blue;
-      case 'BILLED':
-        return Colors.purple;
-      case 'PAID':
+      case 'COMPLETED':
         return Colors.green;
       default:
         return Colors.grey;
@@ -237,7 +235,7 @@ class OrderDetailCard extends StatelessWidget {
               _buildDetailRow('Quantity', '${order.quantityRequested} L')
             else
               _buildDetailRow('Amount', '₹${order.amountRequested}'),
-            _buildDetailRow('Cash Advance', '₹${order.cashAdvance}'),
+            _buildDetailRow('Cash', '₹${order.cash}'),
             if (order.deliveredAt != null)
               _buildDetailRow('Delivered At', order.deliveredAt.toString()),
           ],

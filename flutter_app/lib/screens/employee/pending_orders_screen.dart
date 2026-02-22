@@ -163,12 +163,12 @@ class PendingOrderCard extends StatelessWidget {
                     Column(
                       children: [
                         const Text(
-                          'Cash Advance',
+                          'Cash',
                           style: TextStyle(fontSize: 11, color: Colors.grey),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '₹${order.cashAdvance.toStringAsFixed(2)}',
+                          '₹${order.cash.toString()}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ],

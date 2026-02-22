@@ -5,7 +5,7 @@ class Order {
   final String fuelType;
   final double? amountRequested;
   final double? quantityRequested;
-  final double cashAdvance;
+  final int cash;
   final String status;
   final DateTime? deliveredAt;
   final DateTime createdAt;
@@ -18,7 +18,7 @@ class Order {
     required this.fuelType,
     this.amountRequested,
     this.quantityRequested,
-    required this.cashAdvance,
+    required this.cash,
     required this.status,
     this.deliveredAt,
     required this.createdAt,
@@ -37,7 +37,7 @@ class Order {
       quantityRequested: json['quantityRequested'] != null
           ? (json['quantityRequested'] as num).toDouble()
           : null,
-      cashAdvance: (json['cashAdvance'] as num?)?.toDouble() ?? 0.0,
+      cash: (json['cash'] as num?)?.toInt() ?? 0,
       status: json['status'] as String,
       deliveredAt: json['deliveredAt'] != null
           ? DateTime.parse(json['deliveredAt'] as String)
@@ -55,7 +55,7 @@ class Order {
       'fuelType': fuelType,
       'amountRequested': amountRequested,
       'quantityRequested': quantityRequested,
-      'cashAdvance': cashAdvance,
+      'cash': cash,
       'status': status,
       'deliveredAt': deliveredAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
@@ -70,7 +70,7 @@ class Order {
     String? fuelType,
     double? amountRequested,
     double? quantityRequested,
-    double? cashAdvance,
+    int? cash,
     String? status,
     DateTime? deliveredAt,
     DateTime? createdAt,
@@ -83,7 +83,7 @@ class Order {
       fuelType: fuelType ?? this.fuelType,
       amountRequested: amountRequested ?? this.amountRequested,
       quantityRequested: quantityRequested ?? this.quantityRequested,
-      cashAdvance: cashAdvance ?? this.cashAdvance,
+      cash: cash ?? this.cash,
       status: status ?? this.status,
       deliveredAt: deliveredAt ?? this.deliveredAt,
       createdAt: createdAt ?? this.createdAt,

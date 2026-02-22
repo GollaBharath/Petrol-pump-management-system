@@ -48,12 +48,11 @@ export function subscribeToOrderUpdates(
 				onUpdate(payload.new);
 			},
 		)
-		.on("error", (error) => {
-			if (onError) {
-				onError(new Error(`Real-time subscription error: ${error.message}`));
+		.subscribe((status, err) => {
+			if (status === "CHANNEL_ERROR" && onError) {
+				onError(err instanceof Error ? err : new Error(String(err)));
 			}
-		})
-		.subscribe();
+		});
 
 	return subscription;
 }
@@ -79,15 +78,14 @@ export function subscribeToPendingOrders(
 			},
 			(payload) => {
 				// Trigger re-fetch of pending orders
-				onUpdate(payload);
+				onUpdate([payload.new]);
 			},
 		)
-		.on("error", (error) => {
-			if (onError) {
-				onError(new Error(`Real-time subscription error: ${error.message}`));
+		.subscribe((status, err) => {
+			if (status === "CHANNEL_ERROR" && onError) {
+				onError(err instanceof Error ? err : new Error(String(err)));
 			}
-		})
-		.subscribe();
+		});
 
 	return subscription;
 }
@@ -137,12 +135,11 @@ export function subscribeToAllOrderChanges(
 				if (onDelete) onDelete(payload.old);
 			},
 		)
-		.on("error", (error) => {
-			if (onError) {
-				onError(new Error(`Real-time subscription error: ${error.message}`));
+		.subscribe((status, err) => {
+			if (status === "CHANNEL_ERROR" && onError) {
+				onError(err instanceof Error ? err : new Error(String(err)));
 			}
-		})
-		.subscribe();
+		});
 
 	return subscription;
 }
@@ -170,12 +167,11 @@ export function subscribeToBillUpdates(
 				onUpdate(payload.new);
 			},
 		)
-		.on("error", (error) => {
-			if (onError) {
-				onError(new Error(`Real-time subscription error: ${error.message}`));
+		.subscribe((status, err) => {
+			if (status === "CHANNEL_ERROR" && onError) {
+				onError(err instanceof Error ? err : new Error(String(err)));
 			}
-		})
-		.subscribe();
+		});
 
 	return subscription;
 }
@@ -203,12 +199,11 @@ export function subscribeToCashAdvanceUpdates(
 				onUpdate(payload.new);
 			},
 		)
-		.on("error", (error) => {
-			if (onError) {
-				onError(new Error(`Real-time subscription error: ${error.message}`));
+		.subscribe((status, err) => {
+			if (status === "CHANNEL_ERROR" && onError) {
+				onError(err instanceof Error ? err : new Error(String(err)));
 			}
-		})
-		.subscribe();
+		});
 
 	return subscription;
 }
@@ -248,12 +243,11 @@ export function subscribeToPriceUpdates(
 				onUpdate(payload.new);
 			},
 		)
-		.on("error", (error) => {
-			if (onError) {
-				onError(new Error(`Real-time subscription error: ${error.message}`));
+		.subscribe((status, err) => {
+			if (status === "CHANNEL_ERROR" && onError) {
+				onError(err instanceof Error ? err : new Error(String(err)));
 			}
-		})
-		.subscribe();
+		});
 
 	return subscription;
 }

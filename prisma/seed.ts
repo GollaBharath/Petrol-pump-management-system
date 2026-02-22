@@ -39,7 +39,8 @@ async function upsertUser(opts: {
 				await supabase.auth.admin.listUsers();
 			if (listErr) throw listErr;
 			const existing = list.users.find((u) => u.email === opts.email);
-			if (!existing) throw new Error(`Cannot find Supabase user for ${opts.email}`);
+			if (!existing)
+				throw new Error(`Cannot find Supabase user for ${opts.email}`);
 			supabaseId = existing.id;
 			// Ensure password matches
 			await supabase.auth.admin.updateUserById(supabaseId, {
@@ -54,7 +55,11 @@ async function upsertUser(opts: {
 
 	const user = await prisma.user.upsert({
 		where: { id: supabaseId },
-		update: { role: opts.role, fullName: opts.fullName, phone: opts.phone ?? null },
+		update: {
+			role: opts.role,
+			fullName: opts.fullName,
+			phone: opts.phone ?? null,
+		},
 		create: {
 			id: supabaseId,
 			email: opts.email,
@@ -142,7 +147,6 @@ async function seed() {
 				vehicleNumber: "DL01AB1234",
 				fuelType: "PETROL",
 				quantityRequested: 50,
-				cashAdvance: 2000,
 				status: "PENDING",
 			},
 		});
@@ -154,26 +158,14 @@ async function seed() {
 				vehicleNumber: "DL01CD5678",
 				fuelType: "DIESEL",
 				amountRequested: 5000,
-				cashAdvance: 1500,
 				status: "DELIVERED",
 				deliveredAt: new Date(),
+				quantityDelivered: 53.0,
+				pricePerLiter: dieselPrice.pricePerLiter,
+				totalAmount: 53.0 * dieselPrice.pricePerLiter,
 			},
 		});
 		console.log("✅ Order 2 created:", order2.id);
-
-		// Bill for delivered order
-		const bill = await prisma.bill.create({
-			data: {
-				orderId: order2.id,
-				quantityDelivered: 53.0,
-				pricePerLiter: dieselPrice.pricePerLiter,
-				totalAmount: 5000,
-				cashAdvance: 1500,
-				netAmount: 6500,
-				status: "PENDING",
-			},
-		});
-		console.log("✅ Bill created:", bill.id);
 
 		console.log("\n🎉 Database seed completed successfully!");
 		console.log("\n📊 Seeded accounts (all can login):");

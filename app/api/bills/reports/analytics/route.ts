@@ -1,117 +1,97 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticate } from "@/lib/auth";
-import { supabase } from "@/lib/supabase-client";
-import { z } from "zod";
-
-const reportQuerySchema = z.object({
-	startDate: z.string().datetime().optional(),
-	endDate: z.string().datetime().optional(),
-	status: z.enum(["PENDING", "PAID", "OVERDUE"]).optional(),
-	limit: z.string().transform(Number).optional(),
-	offset: z.string().transform(Number).optional(),
-});
+import { prisma } from "@/lib/prisma";
+import { authenticate, successResponse, errorResponse } from "@/lib/auth";
 
 /**
  * GET /api/bills/reports/analytics
- * Get billing analytics and reports
- * Admin only
+ * Get payment analytics and reports (admin only)
  */
 export async function GET(request: NextRequest) {
 	try {
-		const user = await authenticate(request);
+		const authResult = await authenticate(request);
+		if (authResult instanceof NextResponse) return authResult;
 
-		if (!user || user.role !== "ADMIN") {
-			return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+		const authRequest = authResult as any;
+		if (authRequest.user?.role !== "ADMIN") {
+			return errorResponse("Admin access required", 403);
 		}
 
-		const searchParams = request.nextUrl.searchParams;
-		const query = reportQuerySchema.parse({
-			startDate: searchParams.get("startDate") || undefined,
-			endDate: searchParams.get("endDate") || undefined,
-			status: searchParams.get("status") || undefined,
-			limit: searchParams.get("limit") || "50",
-			offset: searchParams.get("offset") || "0",
+		const { searchParams } = new URL(request.url);
+		const startDate = searchParams.get("startDate");
+		const endDate = searchParams.get("endDate");
+		const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 365);
+		const offset = parseInt(searchParams.get("offset") || "0");
+
+		const where: any = {};
+		if (startDate || endDate) {
+			where.paymentDate = {};
+			if (startDate) where.paymentDate.gte = new Date(startDate);
+			if (endDate) where.paymentDate.lte = new Date(endDate);
+		}
+
+		const [payments, total] = await Promise.all([
+			prisma.payment.findMany({
+				where,
+				include: {
+					customerProfile: {
+						include: {
+							user: {
+								select: { id: true, fullName: true, email: true },
+							},
+						},
+					},
+				},
+				orderBy: { paymentDate: "desc" },
+				take: limit,
+				skip: offset,
+			}),
+			prisma.payment.count({ where }),
+		]);
+
+		// Aggregate stats (all time, ignoring pagination filter for totals)
+		const agg = await prisma.payment.aggregate({
+			_sum: { amount: true },
+			_count: { id: true },
+			_avg: { amount: true },
 		});
 
-		let billsQuery = supabase.from("bills").select("*", { count: "exact" });
+		// Total outstanding (customers who owe money)
+		const outstandingAgg = await prisma.customerProfile.aggregate({
+			where: { currentBalance: { lt: 0 } },
+			_sum: { currentBalance: true },
+		});
 
-		if (query.startDate) {
-			billsQuery = billsQuery.gte("createdAt", query.startDate);
-		}
+		// Breakdown by payment method
+		const byMethod = await prisma.payment.groupBy({
+			by: ["paymentMethod"],
+			_sum: { amount: true },
+			_count: { id: true },
+			orderBy: { _sum: { amount: "desc" } },
+		});
 
-		if (query.endDate) {
-			billsQuery = billsQuery.lte("createdAt", query.endDate);
-		}
-
-		if (query.status) {
-			billsQuery = billsQuery.eq("status", query.status);
-		}
-
-		billsQuery = billsQuery
-			.order("createdAt", { ascending: false })
-			.range(query.offset || 0, (query.offset || 0) + (query.limit || 50) - 1);
-
-		const { data: bills, count, error } = await billsQuery;
-
-		if (error) {
-			throw error;
-		}
-
-		// Calculate statistics
-		let totalAmount = 0;
-		let paidAmount = 0;
-		let overdueAmount = 0;
-
-		const allBillsQuery = supabase.from("bills").select("*");
-
-		const { data: allBills } = await allBillsQuery;
-
-		if (allBills) {
-			allBills.forEach((bill: any) => {
-				totalAmount += bill.totalAmount;
-				if (bill.status === "PAID") {
-					paidAmount += bill.totalAmount;
-				}
-				if (bill.status === "OVERDUE") {
-					overdueAmount += bill.totalAmount;
-				}
-			});
-		}
-
-		return NextResponse.json(
-			{
-				success: true,
-				data: {
-					bills,
-					pagination: {
-						total: count,
-						limit: query.limit,
-						offset: query.offset,
-					},
-					analytics: {
-						totalAmount,
-						paidAmount,
-						pendingAmount: totalAmount - paidAmount - overdueAmount,
-						overdueAmount,
-						paymentRate: totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0,
-					},
-				},
+		return successResponse({
+			payments,
+			pagination: {
+				total,
+				limit,
+				offset,
+				page: Math.floor(offset / limit) + 1,
+				pages: Math.ceil(total / limit),
 			},
-			{ status: 200 },
-		);
-	} catch (error) {
-		if (error instanceof z.ZodError) {
-			return NextResponse.json(
-				{
-					error: "Validation error",
-					details: error.errors,
-				},
-				{ status: 400 },
-			);
-		}
-
-		const errorMessage =
-			error instanceof Error ? error.message : "Failed to fetch bill reports";
-		return NextResponse.json({ error: errorMessage }, { status: 400 });
+			analytics: {
+				totalPaymentsCollected: agg._sum.amount ?? 0,
+				totalPaymentCount: agg._count.id,
+				averagePaymentAmount: agg._avg.amount ?? 0,
+				totalOutstanding: Math.abs(outstandingAgg._sum.currentBalance ?? 0),
+				byPaymentMethod: byMethod.map((m) => ({
+					method: m.paymentMethod,
+					total: m._sum.amount ?? 0,
+					count: m._count.id,
+				})),
+			},
+		});
+	} catch (error: any) {
+		console.error("Payment analytics error:", error);
+		return errorResponse("Failed to fetch payment analytics", 500);
 	}
 }

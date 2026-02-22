@@ -1,17 +1,9 @@
 /**
  * Admin Dashboard API Utilities
- *
- * Helper functions for fetching and aggregating data for the admin dashboard
- * These utilities work with existing API endpoints and aggregate data for display
  */
 
 import { prisma } from "@/lib/prisma";
-import { Role } from "@prisma/client";
 
-/**
- * Get dashboard overview stats
- * Includes total orders, revenue, cash advances, and employee metrics
- */
 export async function getDashboardStats() {
 	const today = new Date();
 	today.setHours(0, 0, 0, 0);
@@ -19,97 +11,63 @@ export async function getDashboardStats() {
 	const [
 		totalOrders,
 		pendingOrders,
-		deliveredOrders,
+		deliveredTodayOrders,
 		totalRevenue,
-		pendingCashAdvances,
-		totalCashAdvanced,
 		activeEmployees,
+		totalOutstanding,
 	] = await Promise.all([
-		// Total orders (all time)
 		prisma.order.count(),
-		// Pending orders
+		prisma.order.count({ where: { status: "PENDING" } }),
 		prisma.order.count({
-			where: { status: "PENDING" },
+			where: { status: "DELIVERED", deliveredAt: { gte: today } },
 		}),
-		// Delivered orders today
-		prisma.order.count({
+		prisma.order.aggregate({
 			where: {
-				status: "DELIVERED",
-				deliveredAt: {
-					gte: today,
-				},
+				status: { in: ["DELIVERED", "COMPLETED"] },
+				totalAmount: { not: null },
 			},
+			_sum: { totalAmount: true },
 		}),
-		// Total revenue (sum of bills)
-		prisma.bill.aggregate({
-			_sum: {
-				totalAmount: true,
-			},
-		}),
-		// Pending cash advances (not reconciled)
-		prisma.cashAdvanceTransaction.count({
-			where: { type: "DISBURSED" },
-		}),
-		// Total cash advanced
-		prisma.cashAdvanceTransaction.aggregate({
-			_sum: {
-				amount: true,
-			},
-			where: { type: "DISBURSED" },
-		}),
-		// Active employees (online)
-		prisma.user.count({
-			where: { role: "EMPLOYEE" },
+		prisma.user.count({ where: { role: "EMPLOYEE" } }),
+		prisma.customerProfile.aggregate({
+			where: { currentBalance: { lt: 0 } },
+			_sum: { currentBalance: true },
 		}),
 	]);
 
 	return {
 		totalOrders,
 		pendingOrders,
-		deliveredTodayOrders: deliveredOrders,
-		totalRevenue: totalRevenue._sum.totalAmount || 0,
-		pendingCashAdvances,
-		totalCashAdvanced: totalCashAdvanced._sum.amount || 0,
+		deliveredTodayOrders,
+		totalRevenue: totalRevenue._sum.totalAmount ?? 0,
 		activeEmployees,
+		totalOutstanding: Math.abs(totalOutstanding._sum.currentBalance ?? 0),
+		pendingCashAdvances: 0,
+		totalCashAdvanced: 0,
 	};
 }
 
-/**
- * Get orders with details for dashboard display
- */
 export async function getOrdersForDashboard(
 	limit: number = 10,
 	offset: number = 0,
-	status?: "PENDING" | "DELIVERED" | "CANCELLED",
+	status?: "PENDING" | "DELIVERED" | "COMPLETED",
 ) {
-	const orders = await prisma.order.findMany({
-		where: status ? { status } : undefined,
-		include: {
-			customer: {
-				select: {
-					id: true,
-					name: true,
-					email: true,
-				},
-			},
-			bill: {
-				select: {
-					id: true,
-					totalAmount: true,
-					status: true,
-				},
-			},
-		},
-		orderBy: {
-			createdAt: "desc",
-		},
-		take: limit,
-		skip: offset,
-	});
+	const where = status ? { status } : undefined;
 
-	const total = await prisma.order.count({
-		where: status ? { status } : undefined,
-	});
+	const [orders, total] = await Promise.all([
+		prisma.order.findMany({
+			where,
+			include: {
+				customer: {
+					select: { id: true, fullName: true, email: true, phone: true },
+				},
+			},
+			orderBy: { createdAt: "desc" },
+			take: limit,
+			skip: offset,
+		}),
+		prisma.order.count({ where }),
+	]);
 
 	return {
 		orders,
@@ -119,169 +77,70 @@ export async function getOrdersForDashboard(
 	};
 }
 
-/**
- * Get cash advances with tracking information
- */
-export async function getCashAdvancesForDashboard(
+export async function getPaymentsForDashboard(
 	limit: number = 10,
 	offset: number = 0,
-	status?: "DISBURSED" | "RECONCILED",
 ) {
-	const advances = await prisma.cashAdvanceTransaction.findMany({
-		where: status ? { type: status } : undefined,
-		include: {
-			employee: {
-				select: {
-					id: true,
-					name: true,
-					email: true,
-				},
-			},
-			order: {
-				select: {
-					id: true,
-					quantityOrdered: true,
-				},
-			},
-			bill: {
-				select: {
-					id: true,
-					totalAmount: true,
-				},
-			},
-		},
-		orderBy: {
-			createdAt: "desc",
-		},
-		take: limit,
-		skip: offset,
-	});
-
-	const total = await prisma.cashAdvanceTransaction.count({
-		where: status ? { type: status } : undefined,
-	});
-
-	return {
-		advances,
-		total,
-		page: Math.floor(offset / limit) + 1,
-		pageSize: limit,
-	};
-}
-
-/**
- * Get bills with payment tracking
- */
-export async function getBillsForDashboard(
-	limit: number = 10,
-	offset: number = 0,
-	status?: "PENDING" | "PAID",
-) {
-	const bills = await prisma.bill.findMany({
-		where: status ? { status } : undefined,
-		include: {
-			order: {
-				select: {
-					id: true,
-					customer: {
-						select: {
-							name: true,
-							email: true,
+	const [payments, total] = await Promise.all([
+		prisma.payment.findMany({
+			include: {
+				customerProfile: {
+					include: {
+						user: {
+							select: { id: true, fullName: true, email: true },
 						},
 					},
 				},
 			},
-			cashAdvance: {
-				select: {
-					amount: true,
-				},
-			},
-		},
-		orderBy: {
-			createdAt: "desc",
-		},
-		take: limit,
-		skip: offset,
-	});
-
-	const total = await prisma.bill.count({
-		where: status ? { status } : undefined,
-	});
+			orderBy: { paymentDate: "desc" },
+			take: limit,
+			skip: offset,
+		}),
+		prisma.payment.count(),
+	]);
 
 	return {
-		bills,
+		payments,
 		total,
 		page: Math.floor(offset / limit) + 1,
 		pageSize: limit,
 	};
 }
 
-/**
- * Get employee activity summary
- */
-export async function getEmployeeActivityForDashboard(limit: number = 10) {
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-
-	const employees = await prisma.user.findMany({
-		where: { role: "EMPLOYEE" },
-		select: {
-			id: true,
-			name: true,
-			email: true,
-			orders: {
-				where: {
-					deliveredAt: {
-						gte: today,
-					},
-				},
-				select: {
-					id: true,
-				},
-			},
-			cashAdvances: {
-				where: {
-					createdAt: {
-						gte: today,
-					},
-				},
-				select: {
-					amount: true,
-				},
+export async function getOutstandingCustomersForDashboard(limit: number = 10) {
+	const profiles = await prisma.customerProfile.findMany({
+		where: { currentBalance: { lt: 0 } },
+		include: {
+			user: {
+				select: { id: true, fullName: true, email: true, phone: true },
 			},
 		},
+		orderBy: { currentBalance: "asc" },
 		take: limit,
 	});
 
-	return employees.map((emp) => ({
-		id: emp.id,
-		name: emp.name,
-		email: emp.email,
-		ordersCompletedToday: emp.orders.length,
-		totalCashAdvancedToday: emp.cashAdvances.reduce(
-			(sum, ca) => sum + ca.amount,
-			0,
-		),
+	return profiles.map((p) => ({
+		customerProfileId: p.id,
+		userId: p.userId,
+		fullName: p.user.fullName,
+		email: p.user.email,
+		phone: p.user.phone,
+		currentBalance: p.currentBalance,
+		outstanding: Math.abs(p.currentBalance),
+		totalPurchases: p.totalPurchases,
+		totalPayments: p.totalPayments,
 	}));
 }
 
-/**
- * Get price update status
- */
 export async function getPriceStatusForDashboard() {
-	const fuelTypes = ["PETROL", "DIESEL"];
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
+	const fuelTypes = ["PETROL", "DIESEL"] as const;
 
-	const prices = await Promise.all(
+	return Promise.all(
 		fuelTypes.map(async (fuelType) => {
 			const latestPrice = await prisma.fuelPrice.findFirst({
-				where: { fuelType: fuelType as any },
+				where: { fuelType },
 				orderBy: { date: "desc" },
-				select: {
-					pricePerLiter: true,
-					date: true,
-				},
+				select: { pricePerLiter: true, date: true },
 			});
 
 			if (!latestPrice) {
@@ -295,46 +154,36 @@ export async function getPriceStatusForDashboard() {
 			}
 
 			const hoursSinceUpdate = Math.floor(
-				(new Date().getTime() - new Date(latestPrice.date).getTime()) /
-					(1000 * 60 * 60),
+				(Date.now() - new Date(latestPrice.date).getTime()) / (1000 * 60 * 60),
 			);
-			const needsUpdate = hoursSinceUpdate > 24;
 
 			return {
 				fuelType,
 				currentPrice: latestPrice.pricePerLiter,
 				lastUpdated: latestPrice.date,
-				needsUpdate,
+				needsUpdate: hoursSinceUpdate > 24,
 				hoursOverdue: Math.max(0, hoursSinceUpdate - 24),
 			};
 		}),
 	);
-
-	return prices;
 }
 
-/**
- * Get revenue trend for the last 30 days
- */
 export async function getRevenueTrend(days: number = 30) {
 	const startDate = new Date();
 	startDate.setDate(startDate.getDate() - days);
+	startDate.setHours(0, 0, 0, 0);
 
-	const dailyRevenue = await prisma.bill.groupBy({
-		by: ["createdAt"],
-		where: {
-			createdAt: {
-				gte: startDate,
-			},
-			status: "PAID",
-		},
-		_sum: {
-			totalAmount: true,
-		},
-	});
+	const rows = await prisma.$queryRaw<{ date: string; revenue: number }[]>`
+		SELECT
+			DATE(completed_at)::text AS date,
+			COALESCE(SUM(total_amount), 0)::float AS revenue
+		FROM orders
+		WHERE completed_at >= ${startDate}
+		  AND status = 'COMPLETED'
+		  AND total_amount IS NOT NULL
+		GROUP BY DATE(completed_at)
+		ORDER BY date ASC
+	`;
 
-	return dailyRevenue.map((record) => ({
-		date: record.createdAt.toISOString().split("T")[0],
-		revenue: record._sum.totalAmount || 0,
-	}));
+	return rows.map((r) => ({ date: r.date, revenue: Number(r.revenue) }));
 }

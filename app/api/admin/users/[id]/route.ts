@@ -37,7 +37,7 @@ export async function GET(
 			where: { id: params.id },
 			include: {
 				_count: {
-					select: { orders: true, cashAdvanceTransactions: true },
+					select: { orders: true },
 				},
 				orders: {
 					orderBy: { createdAt: "desc" },

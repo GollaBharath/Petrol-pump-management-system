@@ -45,7 +45,6 @@ interface Customer {
 export default function BillingSection() {
 	const router = useRouter();
 	const [customers, setCustomers] = useState<Customer[]>([]);
-	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [searchTerm, setSearchTerm] = useState("");
@@ -73,7 +72,6 @@ export default function BillingSection() {
 			}>(`/api/customers?${params}`);
 
 			setCustomers(data.customers);
-			setTotal(data.pagination.total);
 			setSummary(data.summary);
 		} catch (err: any) {
 			setError(err.message || "Failed to fetch customers");
@@ -85,12 +83,6 @@ export default function BillingSection() {
 	useEffect(() => {
 		fetchCustomers();
 	}, [fetchCustomers]);
-
-	const getBalanceColor = (balance: number) => {
-		if (balance < 0) return "text-red-600"; // Customer owes money
-		if (balance > 0) return "text-green-600"; // Customer credit
-		return "text-gray-600"; // Balanced
-	};
 
 	const getBalanceBadge = (balance: number) => {
 		if (balance < 0) {

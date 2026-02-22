@@ -15,7 +15,7 @@ class _OrderPlacementScreenState extends ConsumerState<OrderPlacementScreen> {
   final _vehicleController = TextEditingController();
   final _amountController = TextEditingController();
   final _quantityController = TextEditingController();
-  final _cashAdvanceController = TextEditingController();
+  final _cashController = TextEditingController();
 
   String _selectedFuelType = 'PETROL';
   String _orderType = 'QUANTITY'; // QUANTITY or AMOUNT
@@ -26,7 +26,7 @@ class _OrderPlacementScreenState extends ConsumerState<OrderPlacementScreen> {
     _vehicleController.dispose();
     _amountController.dispose();
     _quantityController.dispose();
-    _cashAdvanceController.dispose();
+    _cashController.dispose();
     super.dispose();
   }
 
@@ -65,7 +65,7 @@ class _OrderPlacementScreenState extends ConsumerState<OrderPlacementScreen> {
           amountRequested: _orderType == 'AMOUNT'
               ? double.tryParse(_amountController.text)
               : null,
-          cashAdvance: double.tryParse(_cashAdvanceController.text) ?? 0,
+          cash: int.tryParse(_cashController.text) ?? 0,
         )).future,
       );
 
@@ -185,14 +185,14 @@ class _OrderPlacementScreenState extends ConsumerState<OrderPlacementScreen> {
               ],
               const SizedBox(height: 24),
               const Text(
-                'Cash Advance (Optional)',
+                'Cash (Optional)',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: _cashAdvanceController,
+                controller: _cashController,
                 decoration: InputDecoration(
-                  hintText: 'Enter cash advance amount',
+                  hintText: 'Enter cash amount to add',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

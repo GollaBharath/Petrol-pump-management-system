@@ -127,10 +127,9 @@ class _OrderFulfillmentScreenState
                         _buildDetailRow('Requested Amount',
                             '₹${order.amountRequested!.toStringAsFixed(2)}'),
                       ],
-                      if (order.cashAdvance > 0) ...[
+                      if (order.cash > 0) ...[
                         const Divider(height: 24),
-                        _buildDetailRow('Cash Advance',
-                            '₹${order.cashAdvance.toStringAsFixed(2)}',
+                        _buildDetailRow('Cash', '₹${order.cash}',
                             valueColor: Colors.green),
                       ],
                     ],

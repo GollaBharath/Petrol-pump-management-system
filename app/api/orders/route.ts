@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 				fuelType: validatedData.fuelType,
 				amountRequested: validatedData.amountRequested,
 				quantityRequested: validatedData.quantityRequested,
-				cashAdvance: validatedData.cashAdvance,
+				cash: validatedData.cash,
 				status: "PENDING",
 			},
 			include: {
@@ -95,7 +95,6 @@ export async function GET(request: NextRequest) {
 							phone: true,
 						},
 					},
-					bills: true,
 				},
 				orderBy: { createdAt: "desc" },
 				take: limit,
