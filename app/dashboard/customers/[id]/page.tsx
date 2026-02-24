@@ -54,6 +54,7 @@ interface Order {
 	fuelType: string;
 	amountRequested: number | null;
 	quantityRequested: number | null;
+	cash: number;
 	quantityDelivered: number | null;
 	pricePerLiter: number | null;
 	totalAmount: number | null;
@@ -593,10 +594,12 @@ export default function CustomerDetailPage({
 								<TableHeader>
 									<TableRow>
 										<TableHead>Date</TableHead>
-										<TableHead>Indent / Vehicle</TableHead>
+										<TableHead>Indent No.</TableHead>
+										<TableHead>Vehicle</TableHead>
 										<TableHead>Fuel</TableHead>
 										<TableHead className="text-right">Qty (L)</TableHead>
 										<TableHead className="text-right">Price/L</TableHead>
+										<TableHead className="text-right">Cash</TableHead>
 										<TableHead className="text-right">Total</TableHead>
 										<TableHead>Status</TableHead>
 									</TableRow>
@@ -608,7 +611,10 @@ export default function CustomerDetailPage({
 												{new Date(order.createdAt).toLocaleDateString("en-IN")}
 											</TableCell>
 											<TableCell className="font-medium">
-												{order.indentNumber ? `#${order.indentNumber} - ` : ""} {order.vehicleNumber}
+												{order.indentNumber ? `#${order.indentNumber}` : "—"}
+											</TableCell>
+											<TableCell className="font-medium">
+												{order.vehicleNumber}
 											</TableCell>
 											<TableCell>{order.fuelType}</TableCell>
 											<TableCell className="text-right">
@@ -618,6 +624,9 @@ export default function CustomerDetailPage({
 												{order.pricePerLiter
 													? `₹${order.pricePerLiter.toFixed(2)}`
 													: "—"}
+											</TableCell>
+											<TableCell className="text-right font-medium text-orange-600">
+												{order.cash ? `₹${order.cash.toLocaleString("en-IN")}` : "—"}
 											</TableCell>
 											<TableCell className="text-right font-medium">
 												{order.totalAmount
