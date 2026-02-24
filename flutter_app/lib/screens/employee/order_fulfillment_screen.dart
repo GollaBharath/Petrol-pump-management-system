@@ -107,7 +107,10 @@ class _OrderFulfillmentScreenState
                       ),
                       const SizedBox(height: 16),
                       _buildDetailRow(
-                          'Order ID', '#${order.id.substring(0, 8)}'),
+                          'Order ID',
+                          order.indentNumber != null
+                              ? '#${order.indentNumber}'
+                              : '#${order.id.substring(0, 8)}'),
                       const Divider(height: 24),
                       _buildDetailRow('Vehicle', order.vehicleNumber),
                       const Divider(height: 24),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:petrol_pump_management/config/app_config.dart';
 import 'package:petrol_pump_management/providers/auth_provider.dart';
-import 'package:petrol_pump_management/providers/providers.dart';
 import 'package:petrol_pump_management/routes/app_routes.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -21,9 +20,12 @@ class HomeScreen extends ConsumerWidget {
         actions: [
           IconButton(
             onPressed: () async {
-              await ref.read(logoutProvider.future);
+              await ref.read(authNotifierProvider.notifier).logout();
               if (context.mounted) {
-                Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/',
+                  (route) => false,
+                );
               }
             },
             icon: const Icon(Icons.logout),
@@ -45,6 +47,13 @@ class HomeScreen extends ConsumerWidget {
                 _buildCustomerMenu(context),
               ] else if (isEmployee) ...[
                 _buildEmployeeMenu(context),
+              ] else ...[
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
               ],
             ],
           ),

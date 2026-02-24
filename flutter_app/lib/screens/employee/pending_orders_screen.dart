@@ -72,7 +72,9 @@ class PendingOrderCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Order #${order.id.substring(0, 8)}',
+                          order.indentNumber != null 
+                              ? 'Indent Number - ${order.indentNumber}' 
+                              : 'Order #${order.id.substring(0, 8)}',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,

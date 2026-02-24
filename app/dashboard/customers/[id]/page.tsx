@@ -43,12 +43,14 @@ import {
 	Plus,
 	Calendar,
 	Car,
+	Hash,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
 interface Order {
 	id: string;
 	vehicleNumber: string;
+	indentNumber: number | null;
 	fuelType: string;
 	amountRequested: number | null;
 	quantityRequested: number | null;
@@ -83,6 +85,9 @@ interface CustomerProfile {
 	totalOrders: number;
 	totalPurchases: number;
 	totalPayments: number;
+	indentStart: number | null;
+	indentEnd: number | null;
+	currentIndent: number | null;
 	payments: Payment[];
 }
 
@@ -128,6 +133,12 @@ export default function CustomerDetailPage({
 	const [paymentDate, setPaymentDate] = useState("");
 	const [submittingPayment, setSubmittingPayment] = useState(false);
 
+	// Indent Settings
+	const [showIndentDialog, setShowIndentDialog] = useState(false);
+	const [indentStart, setIndentStart] = useState("");
+	const [indentEnd, setIndentEnd] = useState("");
+	const [submittingIndent, setSubmittingIndent] = useState(false);
+
 	const fetchCustomerData = useCallback(async () => {
 		setLoading(true);
 		setError(null);
@@ -148,6 +159,10 @@ export default function CustomerDetailPage({
 			setCustomer(data.customer);
 			setOrders(data.orders);
 			setVehicles(data.vehicles);
+			if (data.customer?.customerProfile) {
+				setIndentStart(data.customer.customerProfile.indentStart?.toString() || "");
+				setIndentEnd(data.customer.customerProfile.indentEnd?.toString() || "");
+			}
 		} catch (err: any) {
 			setError(err.message || "Failed to fetch customer data");
 		} finally {
@@ -194,6 +209,28 @@ export default function CustomerDetailPage({
 		}
 	};
 
+	const handleUpdateIndent = async () => {
+		if (!indentStart || !indentEnd || parseInt(indentStart) <= 0 || parseInt(indentEnd) < parseInt(indentStart)) {
+			alert("Please enter a valid indent range (End must be >= Start > 0).");
+			return;
+		}
+
+		setSubmittingIndent(true);
+		try {
+			await api.post(`/api/admin/users/${params.id}/indent`, {
+				indentStart: parseInt(indentStart),
+				indentEnd: parseInt(indentEnd),
+			});
+
+			setShowIndentDialog(false);
+			await fetchCustomerData();
+		} catch (err: any) {
+			alert(err.message || "Failed to update indent range");
+		} finally {
+			setSubmittingIndent(false);
+		}
+	};
+
 	if (loading && !customer) {
 		return (
 			<div className="flex items-center justify-center h-full py-20">
@@ -231,20 +268,69 @@ export default function CustomerDetailPage({
 						<p className="text-gray-600">{customer.email}</p>
 					</div>
 				</div>
-				<Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-					<DialogTrigger asChild>
-						<Button>
-							<Plus className="h-4 w-4 mr-2" />
-							Add Payment
-						</Button>
-					</DialogTrigger>
-					<DialogContent>
-						<DialogHeader>
-							<DialogTitle>Add Payment</DialogTitle>
-							<DialogDescription>
-								Record a payment from {customer.fullName}
-							</DialogDescription>
-						</DialogHeader>
+				<div className="flex items-center gap-2">
+					<Dialog open={showIndentDialog} onOpenChange={setShowIndentDialog}>
+						<DialogTrigger asChild>
+							<Button variant="outline">
+								<Hash className="h-4 w-4 mr-2" />
+								Configure Indent
+							</Button>
+						</DialogTrigger>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>Configure Indent Number Range</DialogTitle>
+								<DialogDescription>
+									Set the range of indent numbers the customer will be assigned for each order sequentially.
+								</DialogDescription>
+							</DialogHeader>
+							<div className="space-y-4">
+								<div>
+									<Label htmlFor="indentStart">Start Number</Label>
+									<Input
+										id="indentStart"
+										type="number"
+										placeholder="e.g. 2000"
+										value={indentStart}
+										onChange={(e) => setIndentStart(e.target.value)}
+									/>
+								</div>
+								<div>
+									<Label htmlFor="indentEnd">End Number</Label>
+									<Input
+										id="indentEnd"
+										type="number"
+										placeholder="e.g. 3000"
+										value={indentEnd}
+										onChange={(e) => setIndentEnd(e.target.value)}
+									/>
+								</div>
+								<Button
+									className="w-full"
+									onClick={handleUpdateIndent}
+									disabled={submittingIndent}>
+									{submittingIndent ? (
+										<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+									) : null}
+									Save Range
+								</Button>
+							</div>
+						</DialogContent>
+					</Dialog>
+
+					<Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+						<DialogTrigger asChild>
+							<Button>
+								<Plus className="h-4 w-4 mr-2" />
+								Add Payment
+							</Button>
+						</DialogTrigger>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>Add Payment</DialogTitle>
+								<DialogDescription>
+									Record a payment from {customer.fullName}
+								</DialogDescription>
+							</DialogHeader>
 						<div className="space-y-4">
 							<div>
 								<Label htmlFor="amount">Amount (₹) *</Label>
@@ -322,6 +408,7 @@ export default function CustomerDetailPage({
 					</DialogContent>
 				</Dialog>
 			</div>
+			</div>
 
 			{/* Customer Summary */}
 			<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -381,6 +468,20 @@ export default function CustomerDetailPage({
 							₹
 							{(customer.customerProfile?.totalPayments || 0).toLocaleString(
 								"en-IN",
+							)}
+						</div>
+					</CardContent>
+				</Card>
+				<Card>
+					<CardHeader>
+						<CardTitle className="text-sm font-medium">Indent Info</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div className="text-2xl font-bold text-blue-600">
+							{customer.customerProfile?.currentIndent != null ? (
+								<>{customer.customerProfile.currentIndent} / {customer.customerProfile.indentEnd}</>
+							) : (
+								<span className="text-gray-400 text-lg">Not configured</span>
 							)}
 						</div>
 					</CardContent>
@@ -492,7 +593,7 @@ export default function CustomerDetailPage({
 								<TableHeader>
 									<TableRow>
 										<TableHead>Date</TableHead>
-										<TableHead>Vehicle</TableHead>
+										<TableHead>Indent / Vehicle</TableHead>
 										<TableHead>Fuel</TableHead>
 										<TableHead className="text-right">Qty (L)</TableHead>
 										<TableHead className="text-right">Price/L</TableHead>
@@ -507,7 +608,7 @@ export default function CustomerDetailPage({
 												{new Date(order.createdAt).toLocaleDateString("en-IN")}
 											</TableCell>
 											<TableCell className="font-medium">
-												{order.vehicleNumber}
+												{order.indentNumber ? `#${order.indentNumber} - ` : ""} {order.vehicleNumber}
 											</TableCell>
 											<TableCell>{order.fuelType}</TableCell>
 											<TableCell className="text-right">

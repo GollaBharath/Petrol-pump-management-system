@@ -2,6 +2,7 @@ class Order {
   final String id;
   final String customerId;
   final String vehicleNumber;
+  final int? indentNumber;
   final String fuelType;
   final double? amountRequested;
   final double? quantityRequested;
@@ -15,6 +16,7 @@ class Order {
     required this.id,
     required this.customerId,
     required this.vehicleNumber,
+    this.indentNumber,
     required this.fuelType,
     this.amountRequested,
     this.quantityRequested,
@@ -30,6 +32,7 @@ class Order {
       id: json['id'] as String,
       customerId: json['customerId'] as String,
       vehicleNumber: json['vehicleNumber'] as String,
+      indentNumber: (json['indentNumber'] as num?)?.toInt(),
       fuelType: json['fuelType'] as String,
       amountRequested: json['amountRequested'] != null
           ? (json['amountRequested'] as num).toDouble()
@@ -52,6 +55,7 @@ class Order {
       'id': id,
       'customerId': customerId,
       'vehicleNumber': vehicleNumber,
+      'indentNumber': indentNumber,
       'fuelType': fuelType,
       'amountRequested': amountRequested,
       'quantityRequested': quantityRequested,

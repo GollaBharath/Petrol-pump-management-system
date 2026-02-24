@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:petrol_pump_management/config/app_config.dart';
+
 import 'package:petrol_pump_management/providers/providers.dart';
 
 class OrderPlacementScreen extends ConsumerStatefulWidget {
@@ -88,6 +88,8 @@ class _OrderPlacementScreenState extends ConsumerState<OrderPlacementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final nextIndentAsync = ref.watch(nextIndentProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Place Order'), elevation: 0),
       body: SafeArea(
@@ -96,6 +98,102 @@ class _OrderPlacementScreenState extends ConsumerState<OrderPlacementScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Next Indent Information Section
+              nextIndentAsync.when(
+                data: (data) {
+                  final isConfigured = data['isConfigured'] as bool? ?? false;
+                  final isExhausted = data['isExhausted'] as bool? ?? false;
+                  final nextIndent = data['nextIndent'] as int?;
+
+                  if (!isConfigured) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        border: Border.all(color: Colors.orange.shade200),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Indent range not configured. Please contact the administrator.',
+                        style: TextStyle(color: Colors.deepOrange),
+                      ),
+                    );
+                  }
+
+                  if (isExhausted) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        border: Border.all(color: Colors.red.shade200),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Your indent range is exhausted. Please contact the administrator to renew it before placing new orders.',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    );
+                  }
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      border: Border.all(color: Colors.blue.shade200),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Indent Number',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.blueGrey,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$nextIndent',
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                error: (error, stack) => Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    border: Border.all(color: Colors.red.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Error loading indent: $error',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 16),
               const Text(
                 'Vehicle Details',
@@ -203,19 +301,34 @@ class _OrderPlacementScreenState extends ConsumerState<OrderPlacementScreen> {
               SizedBox(
                 width: double.infinity,
                 height: 48,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleCreateOrder,
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Place Order',
-                          style: TextStyle(fontSize: 16),
+                child: Consumer(
+                  builder: (context, ref, child) {
+                    final nextIndentState = ref.watch(nextIndentProvider);
+                    // Disable button if loading, exhausted, or not configured
+                    final isDisabled = nextIndentState.maybeWhen(
+                      data: (data) =>
+                          (data['isExhausted'] as bool? ?? false) ||
+                          !(data['isConfigured'] as bool? ?? false),
+                      orElse: () => true,
+                    );
+
+                    return ElevatedButton(
+                      onPressed: (_isLoading || isDisabled)
+                          ? null
+                          : _handleCreateOrder,
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
+                      ),
+                      child: _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'Place Order',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                    );
+                  },
                 ),
               ),
             ],

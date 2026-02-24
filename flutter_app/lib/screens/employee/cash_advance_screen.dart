@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:petrol_pump_management/providers/providers.dart';
-import 'package:petrol_pump_management/providers/auth_provider.dart';
-import 'package:petrol_pump_management/config/app_config.dart';
+
+
 import 'package:intl/intl.dart';
 
 class CashAdvanceScreen extends ConsumerStatefulWidget {

@@ -29,14 +29,14 @@ import {
 import { Search, RefreshCw, Loader2 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
-type OrderStatus = "PENDING" | "DELIVERED" | "BILLED" | "PAID";
+type OrderStatus = "PENDING" | "DELIVERED" | "COMPLETED";
 
 interface Order {
 	id: string;
 	fuelType: "PETROL" | "DIESEL";
 	quantityRequested: number | null;
 	amountRequested: number | null;
-	cashAdvance: number;
+	cash: number;
 	status: OrderStatus;
 	createdAt: string;
 	deliveredAt: string | null;
@@ -46,14 +46,12 @@ interface Order {
 		email: string;
 		phone: string | null;
 	};
-	bills: Array<{ totalAmount: number; netAmount: number }>;
 }
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
 	PENDING: "bg-yellow-100 text-yellow-800",
 	DELIVERED: "bg-blue-100 text-blue-800",
-	BILLED: "bg-purple-100 text-purple-800",
-	PAID: "bg-green-100 text-green-800",
+	COMPLETED: "bg-green-100 text-green-800",
 };
 
 export default function OrdersSection() {
@@ -177,8 +175,7 @@ export default function OrdersSection() {
 								<SelectItem value="all">All Status</SelectItem>
 								<SelectItem value="PENDING">Pending</SelectItem>
 								<SelectItem value="DELIVERED">Delivered</SelectItem>
-								<SelectItem value="BILLED">Billed</SelectItem>
-								<SelectItem value="PAID">Paid</SelectItem>
+								<SelectItem value="COMPLETED">Completed</SelectItem>
 							</SelectContent>
 						</Select>
 					</div>
@@ -237,7 +234,7 @@ export default function OrdersSection() {
 														: "—"}
 											</TableCell>
 											<TableCell className="text-right">
-												₹{order.cashAdvance.toLocaleString()}
+												₹{(order.cash ?? 0).toLocaleString()}
 											</TableCell>
 											<TableCell>
 												<Badge className={STATUS_COLORS[order.status]}>

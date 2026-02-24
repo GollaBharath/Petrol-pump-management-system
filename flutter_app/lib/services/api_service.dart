@@ -219,6 +219,15 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getNextIndent() async {
+    try {
+      final response = await _dio.get('/orders/next-indent');
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   // Price endpoints
   Future<List<FuelPrice>> getLatestPrices() async {
     try {

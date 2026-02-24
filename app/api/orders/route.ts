@@ -24,36 +24,75 @@ export async function POST(request: NextRequest) {
 		const body = await request.json();
 		const validatedData = CreateOrderSchema.parse(body);
 
-		const order = await prisma.order.create({
-			data: {
-				customerId: authRequest.user.id,
-				vehicleNumber: validatedData.vehicleNumber,
-				fuelType: validatedData.fuelType,
-				amountRequested: validatedData.amountRequested,
-				quantityRequested: validatedData.quantityRequested,
-				cash: validatedData.cash,
-				status: "PENDING",
-			},
-			include: {
-				customer: {
-					select: {
-						id: true,
-						fullName: true,
-						email: true,
+		const customerId = authRequest.user.id;
+
+		// We need to fetch the customer profile to verify indent availability and update it atomically.
+		const orderResult = await prisma.$transaction(async (tx) => {
+			const profile = await tx.customerProfile.findUnique({
+				where: { userId: customerId },
+				select: { id: true, indentStart: true, indentEnd: true, currentIndent: true },
+			});
+
+			// If no profile or no indent configured, we might either block them or let them order without an indent.
+			// Given the requirements, indent is expected. But for safety, if not configured, we'll just not assign one, or we can enforce it.
+			// Let's enforce it as requested: "they will get 1 indent number from this range"
+			if (!profile || profile.currentIndent == null || profile.indentEnd == null) {
+				throw new Error("INDENT_NOT_CONFIGURED");
+			}
+
+			if (profile.currentIndent > profile.indentEnd) {
+				throw new Error("INDENT_EXHAUSTED");
+			}
+
+			const assignedIndent = profile.currentIndent;
+
+			// Increment the indent for the next order
+			await tx.customerProfile.update({
+				where: { id: profile.id },
+				data: { currentIndent: assignedIndent + 1 },
+			});
+
+			// Create the order
+			const order = await tx.order.create({
+				data: {
+					customerId: customerId,
+					vehicleNumber: validatedData.vehicleNumber,
+					indentNumber: assignedIndent,
+					fuelType: validatedData.fuelType,
+					amountRequested: validatedData.amountRequested,
+					quantityRequested: validatedData.quantityRequested,
+					cash: validatedData.cash,
+					status: "PENDING",
+				},
+				include: {
+					customer: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true,
+						},
 					},
 				},
-			},
+			});
+
+			return order;
 		});
 
 		return successResponse(
 			{
 				message: "Order created successfully",
-				order,
+				order: orderResult,
 			},
 			201,
 		);
 	} catch (error: any) {
 		console.error("Order creation error:", error);
+		if (error.message === "INDENT_NOT_CONFIGURED") {
+			return errorResponse("Customer indent range not configured by admin.", 400);
+		}
+		if (error.message === "INDENT_EXHAUSTED") {
+			return errorResponse("Customer indent range exhausted. Please contact admin.", 400);
+		}
 		if (error.name === "ZodError") {
 			return errorResponse("Validation error", 400, error.errors);
 		}

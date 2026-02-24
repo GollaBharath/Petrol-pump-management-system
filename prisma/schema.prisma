@@ -68,6 +68,12 @@ model CustomerProfile {
   totalOrders     Int      @default(0) @map("total_orders")
   totalPurchases  Float    @default(0) @map("total_purchases") // Lifetime purchase amount
   totalPayments   Float    @default(0) @map("total_payments") // Lifetime payments made
+  
+  // Indent tracking
+  indentStart     Int?     @map("indent_start")
+  indentEnd       Int?     @map("indent_end")
+  currentIndent   Int?     @map("current_indent")
+
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -84,6 +90,7 @@ model Order {
   id                    String      @id @default(cuid())
   customerId            String      @map("customer_id")
   vehicleNumber         String      @map("vehicle_number")
+  indentNumber          Int?        @map("indent_number")
   fuelType              FuelType    @map("fuel_type")
   amountRequested       Float?      @map("amount_requested") // Amount in INR if customer pays by amount
   quantityRequested     Float?      @map("quantity_requested") // Quantity in liters if customer pays by quantity

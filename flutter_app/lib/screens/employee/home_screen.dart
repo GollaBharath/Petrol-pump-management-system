@@ -58,8 +58,14 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
                   ],
                 ),
                 onTap: () {
-                  ref.read(authNotifierProvider.notifier).logout();
-                  Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+                  // Wait for the popup to close first
+                  Future.delayed(const Duration(milliseconds: 100), () {
+                    ref.read(authNotifierProvider.notifier).logout().then((_) {
+                      if (context.mounted) {
+                        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                      }
+                    });
+                  });
                 },
               ),
             ],
@@ -287,7 +293,9 @@ class _OrderCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Order #${order.id.substring(0, 8)}',
+                          order.indentNumber != null
+                              ? 'Indent Number - ${order.indentNumber}'
+                              : 'Order #${order.id.substring(0, 8)}',
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
@@ -376,7 +384,7 @@ class _OrderCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                    if (order.cashAdvance > 0)
+                    if (order.cash > 0)
                       Column(
                         children: [
                           const Text(
@@ -385,7 +393,7 @@ class _OrderCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '₹${order.cashAdvance.toStringAsFixed(2)}',
+                            '₹${order.cash.toStringAsFixed(2)}',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,

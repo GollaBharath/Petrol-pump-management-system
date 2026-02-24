@@ -32,22 +32,7 @@ class PetrolPumpApp extends ConsumerWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
-      home: authState.when(
-        data: (user) {
-          if (user == null) {
-            return const LoginScreen();
-          }
-          // Route based on user role
-          if (user.role == 'EMPLOYEE') {
-            return const employee.EmployeeHomeScreen();
-          } else if (user.role == 'ADMIN') {
-            return const employee.EmployeeHomeScreen(); // Placeholder for admin dashboard
-          }
-          return const customer.HomeScreen();
-        },
-        loading: () => const SplashScreen(),
-        error: (error, stack) => const LoginScreen(),
-      ),
+      initialRoute: AppRoutes.root,
       routes: AppRoutes.routes,
       onGenerateRoute: AppRoutes.onGenerateRoute,
     );

@@ -36,7 +36,7 @@ final currentUserProvider = FutureProvider<User?>((ref) async {
 
 // Login Provider
 final loginProvider =
-    FutureProvider.family<void, ({String email, String password})>((
+    FutureProvider.autoDispose.family<void, ({String email, String password})>((
   ref,
   params,
 ) async {
@@ -78,7 +78,7 @@ final loginProvider =
 });
 
 // Signup Provider
-final signupProvider = FutureProvider.family<
+final signupProvider = FutureProvider.autoDispose.family<
     void,
     ({
       String email,
@@ -98,21 +98,28 @@ final signupProvider = FutureProvider.family<
 });
 
 // Logout Provider
-final logoutProvider = FutureProvider<void>((ref) async {
+final logoutProvider = FutureProvider.autoDispose<void>((ref) async {
   final apiService = ref.watch(apiServiceProvider);
   await apiService.logout();
-
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.remove('access_token');
-  await prefs.remove('user_data');
-
+  await ref.read(authNotifierProvider.notifier).logout();
   ref.invalidate(currentUserProvider);
+  ref.invalidate(ordersProvider);
+  ref.invalidate(nextIndentProvider);
+  ref.invalidate(pendingOrdersProvider);
+  ref.invalidate(pricesProvider);
+  ref.invalidate(billsProvider);
+  ref.invalidate(pendingCashAdvancesProvider);
+  ref.invalidate(priceUpdateStatusProvider);
 });
 
-// Orders Providers
 final ordersProvider = FutureProvider<List<Order>>((ref) async {
   final apiService = ref.watch(apiServiceProvider);
   return apiService.getOrders();
+});
+
+final nextIndentProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final apiService = ref.watch(apiServiceProvider);
+  return apiService.getNextIndent();
 });
 
 final pendingOrdersProvider = FutureProvider<List<Order>>((ref) async {
@@ -128,7 +135,7 @@ final orderDetailsProvider = FutureProvider.family<Order, String>((
   return apiService.getOrderDetails(orderId);
 });
 
-final createOrderProvider = FutureProvider.family<
+final createOrderProvider = FutureProvider.autoDispose.family<
     Order,
     ({
       String vehicleNumber,
@@ -148,11 +155,12 @@ final createOrderProvider = FutureProvider.family<
 
   // Invalidate orders list to refetch
   ref.invalidate(ordersProvider);
+  ref.invalidate(nextIndentProvider);
   return order;
 });
 
 final markOrderDeliveredProvider =
-    FutureProvider.family<Order, ({String orderId, double quantityDelivered})>((
+    FutureProvider.autoDispose.family<Order, ({String orderId, double quantityDelivered})>((
   ref,
   params,
 ) async {
@@ -201,7 +209,7 @@ final billDetailsProvider = FutureProvider.family<Bill, String>((
   return apiService.getBillDetails(billId);
 });
 // Cash Advance Providers
-final disburseCashAdvanceProvider = FutureProvider.family<Map<String, dynamic>,
+final disburseCashAdvanceProvider = FutureProvider.autoDispose.family<Map<String, dynamic>,
     ({String orderId, String employeeId, double amount, String? description})>(
   (ref, params) async {
     final apiService = ref.watch(apiServiceProvider);
@@ -241,7 +249,7 @@ final cashAdvanceReportProvider = FutureProvider.family<Map<String, dynamic>,
   },
 );
 
-final reconcileCashAdvanceProvider = FutureProvider.family<Map<String, dynamic>,
+final reconcileCashAdvanceProvider = FutureProvider.autoDispose.family<Map<String, dynamic>,
     ({String transactionId, String billId, double amount})>(
   (ref, params) async {
     final apiService = ref.watch(apiServiceProvider);
@@ -263,7 +271,7 @@ final priceUpdateStatusProvider =
   return apiService.getPriceUpdateStatus();
 });
 
-final setDailyPriceProvider = FutureProvider.family<Map<String, dynamic>,
+final setDailyPriceProvider = FutureProvider.autoDispose.family<Map<String, dynamic>,
     ({String fuelType, double pricePerLiter, String? date})>(
   (ref, params) async {
     final apiService = ref.watch(apiServiceProvider);
@@ -279,7 +287,7 @@ final setDailyPriceProvider = FutureProvider.family<Map<String, dynamic>,
   },
 );
 
-final updateDailyPriceProvider = FutureProvider.family<Map<String, dynamic>,
+final updateDailyPriceProvider = FutureProvider.autoDispose.family<Map<String, dynamic>,
     ({String priceId, double newPricePerLiter})>(
   (ref, params) async {
     final apiService = ref.watch(apiServiceProvider);

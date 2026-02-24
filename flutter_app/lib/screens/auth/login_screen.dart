@@ -42,7 +42,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+        // Pop all named routes and return to root to let `main.dart` 
+        // handle the routing based on the new auth state.
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
       if (mounted) {
